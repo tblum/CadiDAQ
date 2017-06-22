@@ -267,7 +267,38 @@ function( enum2str_add )
     file( APPEND "${CPP_FILE}" "${IND}${IND}default:${PADDING}return \"<UNKNOWN>\";\n" )
     file( APPEND "${CPP_FILE}" "${IND}}\n}\n\n" )
    endif( OPTS_USE_CONSTEXPR )
-endfunction( enum2str_add )
+
+   # add a map for "reverse" lookup
+  IF(NOT OPTS_USE_CONSTEXPR )
+    file( APPEND "${HPP_FILE}" "${IND}std::map<${STRING_TYPE}, ${ARGV0}> s_mapStrTo${ARGV0};\n" )
+
+    file( APPEND "${CPP_FILE}" "/*!\n * \\brief Map from a ${STRING_TYPE} to the enum ${ARGV0}\n */\n" )
+    file( APPEND "${CPP_FILE}" "std::map<${STRING_TYPE}, ${ARGV0}> s_mapStrTo${ARGV0} = {\n" )
+
+    set(IS_FIRST TRUE)
+    foreach( I IN LISTS ENUMS_TO_USE )
+      set( PADDING )
+      string( LENGTH "${I}" LEN )
+      math( EXPR TO_PAD "${MAX_LENGTH} - ${LEN}" )
+      foreach( J RANGE ${TO_PAD} )
+        string( APPEND PADDING " " )
+      endforeach( J RANGE ${TO_PAD} )
+
+      # every entry except the last one needs to have a comma attached
+      IF(IS_FIRST)
+        SET(IS_FIRST FALSE)
+      ELSE(IS_FIRST)
+        file( APPEND "${CPP_FILE}" ",\n" )
+      ENDIF(IS_FIRST)
+
+      file( APPEND "${CPP_FILE}" "${IND}{ \"${I}\",${PADDING} ${ENUM_NS}${I}}" )
+    endforeach( I IN LISTS ENUMS_TO_USE )
+    file( APPEND "${CPP_FILE}" "\n};\n\n" )
+   endif( NOT OPTS_USE_CONSTEXPR )
+
+
+
+ endfunction( enum2str_add )
 
 
 function( enum2str_init )
@@ -279,6 +310,7 @@ function( enum2str_init )
   file( APPEND "${HPP_FILE}" "  */\n\n" )
   file( APPEND "${HPP_FILE}" "#pragma once\n\n// clang-format off\n\n" )
   file( APPEND "${HPP_FILE}" "#include <string>\n" )
+  file( APPEND "${HPP_FILE}" "#include <map>\n" )
 
   foreach( I IN LISTS OPTS_INCLUDES )
     file( APPEND "${HPP_FILE}" "#include <${I}>\n" )
