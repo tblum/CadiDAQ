@@ -19,7 +19,7 @@ include(enum2string)
 include_directories("${PROJECT_SOURCE_DIR}/caen")
 enum2str_generate(
    PATH       "${CMAKE_CURRENT_BINARY_DIR}"
-   CLASS_NAME "enum2Str"
+   CLASS_NAME "CaenEnum2str"
    NAMESPACE  "cadidaq"
    FUNC_NAME  "toStr"
    INCLUDES   "CAENDigitizerType.h" # WITHOUT directory
