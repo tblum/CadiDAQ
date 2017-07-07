@@ -208,72 +208,13 @@ function( enum2str_add )
     endif( LEN GREATER MAX_LENGTH )
   endforeach( I IN LISTS ENUMS_TO_USE )
 
-  if( OPTS_USE_CONSTEXPR )
-    file( APPEND "${HPP_FILE}" "${IND}/*!\n    * \\brief Converts the enum ${ARGV0} to a c string\n" )
-    file( APPEND "${HPP_FILE}" "${IND} * \\param _var The enum value to convert\n" )
-    file( APPEND "${HPP_FILE}" "${IND} * \\returns _var converted to a c string\n    */\n" )
-    file( APPEND "${HPP_FILE}" "${IND}static constexpr const char *${OPTS_FUNC_NAME}( ${ARGV0} _var ) noexcept {\n" )
-    file( APPEND "${HPP_FILE}" "${IND}${IND}switch ( _var ) {\n" )
 
-    foreach( I IN LISTS ENUMS_TO_USE )
-      set( PADDING )
-      string( LENGTH "${I}" LEN )
-      math( EXPR TO_PAD "${MAX_LENGTH} - ${LEN}" )
-      foreach( J RANGE ${TO_PAD} )
-        string( APPEND PADDING " " )
-      endforeach( J RANGE ${TO_PAD} )
-
-      file( APPEND "${HPP_FILE}" "${IND}${IND}${IND}case ${ENUM_NS}${I}:${PADDING}return \"${I}\";\n" )
-    endforeach( I IN LISTS ENUMS_TO_USE )
-
-    set( PADDING )
-    string( LENGTH "default"         LEN )
-    string( LENGTH "case ${ENUM_NS}" LEN2 )
-    math( EXPR TO_PAD "(${MAX_LENGTH} + ${LEN2}) - ${LEN}" )
-    foreach( J RANGE ${TO_PAD} )
-      string( APPEND PADDING " " )
-    endforeach( J RANGE ${TO_PAD} )
-
-    file( APPEND "${HPP_FILE}" "${IND}${IND}${IND}default:${PADDING}return \"<UNKNOWN>\";\n" )
-    file( APPEND "${HPP_FILE}" "${IND}${IND}}\n${IND}}\n\n" )
-  else( OPTS_USE_CONSTEXPR )
-    file( APPEND "${HPP_FILE}" "${IND}static ${STRING_TYPE}${OPTS_FUNC_NAME}( ${ARGV0} _var ) noexcept;\n" )
-
-    file( APPEND "${CPP_FILE}" "/*!\n * \\brief Converts the enum ${ARGV0} to a ${STRING_TYPE}\n" )
-    file( APPEND "${CPP_FILE}" " * \\param _var The enum value to convert\n" )
-    file( APPEND "${CPP_FILE}" " * \\returns _var converted to a ${STRING_TYPE}\n */\n" )
-    file( APPEND "${CPP_FILE}" "${STRING_TYPE}${OPTS_CLASS_NAME}::${OPTS_FUNC_NAME}( ${ARGV0} _var ) noexcept {\n" )
-    file( APPEND "${CPP_FILE}" "${IND}switch ( _var ) {\n" )
-
-    foreach( I IN LISTS ENUMS_TO_USE )
-      set( PADDING )
-      string( LENGTH "${I}" LEN )
-      math( EXPR TO_PAD "${MAX_LENGTH} - ${LEN}" )
-      foreach( J RANGE ${TO_PAD} )
-        string( APPEND PADDING " " )
-      endforeach( J RANGE ${TO_PAD} )
-
-      file( APPEND "${CPP_FILE}" "${IND}${IND}case ${ENUM_NS}${I}:${PADDING}return \"${I}\";\n" )
-    endforeach( I IN LISTS ENUMS_TO_USE )
-
-    set( PADDING )
-    string( LENGTH "default"         LEN )
-    string( LENGTH "case ${ENUM_NS}" LEN2 )
-    math( EXPR TO_PAD "(${MAX_LENGTH} + ${LEN2}) - ${LEN}" )
-    foreach( J RANGE ${TO_PAD} )
-      string( APPEND PADDING " " )
-    endforeach( J RANGE ${TO_PAD} )
-
-    file( APPEND "${CPP_FILE}" "${IND}${IND}default:${PADDING}return \"<UNKNOWN>\";\n" )
-    file( APPEND "${CPP_FILE}" "${IND}}\n}\n\n" )
-   endif( OPTS_USE_CONSTEXPR )
-
-   # add a map for "reverse" lookup
+   # add a boost::bimap for bi-directional lookup
   IF(NOT OPTS_USE_CONSTEXPR )
-    file( APPEND "${HPP_FILE}" "${IND}std::map<${STRING_TYPE}, ${ARGV0}> s_mapStrTo${ARGV0};\n" )
+    file( APPEND "${HPP_FILE}" "${IND}typedef boost::bimap< ${STRING_TYPE}, ${ARGV0} > bm_${ARGV0}_type;\n" )
+    file( APPEND "${HPP_FILE}" "${IND}bm_${ARGV0}_type bm_${ARGV0};\n" )
 
-    file( APPEND "${CPP_FILE}" "/*!\n * \\brief Map from a ${STRING_TYPE} to the enum ${ARGV0}\n */\n" )
-    file( APPEND "${CPP_FILE}" "std::map<${STRING_TYPE}, ${ARGV0}> s_mapStrTo${ARGV0} = {\n" )
+    file( APPEND "${CPP_FILE}" "/*!\n * \\brief bimap of ${STRING_TYPE} and enum ${ARGV0}\n */\n" )
 
     set(IS_FIRST TRUE)
     foreach( I IN LISTS ENUMS_TO_USE )
@@ -284,16 +225,9 @@ function( enum2str_add )
         string( APPEND PADDING " " )
       endforeach( J RANGE ${TO_PAD} )
 
-      # every entry except the last one needs to have a comma attached
-      IF(IS_FIRST)
-        SET(IS_FIRST FALSE)
-      ELSE(IS_FIRST)
-        file( APPEND "${CPP_FILE}" ",\n" )
-      ENDIF(IS_FIRST)
-
-      file( APPEND "${CPP_FILE}" "${IND}{ \"${I}\",${PADDING} ${ENUM_NS}${I}}" )
+      file( APPEND "${CPP_FILE}" "${IND}bm_${ARGV0}.insert( bm_${ARGV0}_type::value_type(\"${I}\",${PADDING} ${ENUM_NS}${I})); \n" )
     endforeach( I IN LISTS ENUMS_TO_USE )
-    file( APPEND "${CPP_FILE}" "\n};\n\n" )
+    file( APPEND "${CPP_FILE}" "\n\n" )
    endif( NOT OPTS_USE_CONSTEXPR )
 
 
@@ -310,7 +244,7 @@ function( enum2str_init )
   file( APPEND "${HPP_FILE}" "  */\n\n" )
   file( APPEND "${HPP_FILE}" "#pragma once\n\n// clang-format off\n\n" )
   file( APPEND "${HPP_FILE}" "#include <string>\n" )
-  file( APPEND "${HPP_FILE}" "#include <map>\n" )
+  file( APPEND "${HPP_FILE}" "#include <boost/bimap.hpp>\n" )
 
   foreach( I IN LISTS OPTS_INCLUDES )
     file( APPEND "${HPP_FILE}" "#include <${I}>\n" )
@@ -319,6 +253,7 @@ function( enum2str_init )
   file( APPEND "${HPP_FILE}" "\nnamespace ${OPTS_NAMESPACE} {\n\n" )
   file( APPEND "${HPP_FILE}" "class ${OPTS_CLASS_NAME} {\n" )
   file( APPEND "${HPP_FILE}" " public:\n" )
+  file( APPEND "${HPP_FILE}" " ${OPTS_CLASS_NAME}();\n" )
 
   if( NOT OPTS_USE_CONSTEXPR )
     file( WRITE  "${CPP_FILE}" "/*!\n" )
@@ -329,6 +264,8 @@ function( enum2str_init )
     file( APPEND "${CPP_FILE}" "#pragma clang diagnostic ignored \"-Wcovered-switch-default\"\n\n" )
     file( APPEND "${CPP_FILE}" "#include \"${OPTS_CLASS_NAME}.hpp\"\n\n// clang-format off\n\n" )
     file( APPEND "${CPP_FILE}" "namespace ${OPTS_NAMESPACE} {\n\n" )
+    file( APPEND "${CPP_FILE}" "${OPTS_CLASS_NAME}::${OPTS_CLASS_NAME}(){\n" )
+
   endif( NOT OPTS_USE_CONSTEXPR )
 endfunction( enum2str_init )
 
@@ -338,7 +275,7 @@ function( enum2str_end )
 
   file( APPEND "${HPP_FILE}" "};\n\n}\n\n// clang-format on\n" )
   if( NOT OPTS_USE_CONSTEXPR )
-    file( APPEND "${CPP_FILE}" "\n}\n" )
+    file( APPEND "${CPP_FILE}" "\n}\n}\n" )
     file( APPEND "${CPP_FILE}" "// clang-format on\n\n#pragma clang diagnostic pop\n" )
   endif( NOT OPTS_USE_CONSTEXPR )
 
