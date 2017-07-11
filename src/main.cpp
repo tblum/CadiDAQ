@@ -6,7 +6,6 @@
 #include <fstream>
 #include <iostream>
 #include <iomanip> // std::hex
-#include <stdexcept>
 
 #include <boost/property_tree/ptree.hpp>
 #include <boost/property_tree/ini_parser.hpp>
@@ -29,38 +28,69 @@ public:
   connectionSettings(){;}
   ~connectionSettings(){;}
 
-  uint8_t linkType;
-  uint8_t linkNum;
-  uint8_t conetNode;
+  int linkType;
+  int linkNum;
+  int conetNode;
   uint32_t vmeBaseAddress;
 };
 
 
-template <class CAEN_ENUM> CAEN_ENUM iFindStringInBimap(boost::bimap< std::string, CAEN_ENUM > map, std::string str){
+template <class CAEN_ENUM> boost::optional<CAEN_ENUM> iFindStringInBimap(boost::bimap< std::string, CAEN_ENUM > map, std::string str){
   typedef typename boost::bimap< std::string, CAEN_ENUM >::left_const_iterator const_iterator;
   for( const_iterator i = map.left.begin(), iend = map.left.end(); i != iend; ++i ){
       if(boost::iequals(boost::algorithm::to_lower_copy(i->first), str))
         return i->second;
     }
-  // no value found: throw exception
-  throw std::out_of_range (std::string("No setting in CAEN driver found to match ") + str);
+  return boost::none;
 }
 
 enum class parseDirection {READING, WRITING};
 
-template <class VALUE> void parseSetting(std::string settingName, pt::iptree *node, VALUE& settingValue, parseDirection direction, int base = 10){
+template <class VALUE> void parseSetting(std::string settingName, pt::iptree *node, boost::optional<VALUE>& settingValue, parseDirection direction){
   if (direction == parseDirection::READING){
     // get the setting's value from the ptree
-    std::string str = node->get<std::string>(settingName);
-    settingValue = std::stoul(str, nullptr, base); // TODO: handle exceptions and remaining, unconverted characters
-    std::cout << " value of key " << settingName << " with value '" << node->get<std::string>(settingName) << "' converted to value " << settingValue << std::endl;
+    settingValue = node->get_optional<VALUE>(settingName);
+    if (settingValue) {
+      std::cout << "found key " << settingName << " with value '" << *settingValue << "'" << std::endl;
+    } else {
+      std::cout << "could not find key '" << settingName << "'" << std::endl;
+    }
     // erase value from ptree as it has been successfully parsed
     // NOTE: this will only erase a single instance of the key; if the key exists several times, the other entries remain!
     node->erase(settingName);
   } else {
-    std::string strvalue;
+    // direction: WRITING
+    // add key to ptree if the setting's value has been set
+    if (settingValue) {
+      node->put(settingName, *settingValue);
+    } else {
+      std::cout << "missing key '" << settingName << "' when generating config ptree " << std::endl;
+    }
+  }
+}
+
+template <class VALUE> void parseSetting(std::string settingName, pt::iptree *node, boost::optional<VALUE>& settingValue, parseDirection direction, int base){
+  if (direction == parseDirection::READING){
+    // get the setting's value from the ptree
+    boost::optional<std::string> str;
+    parseSetting(settingName, node, str, direction);
+    if (str) {
+      // verify that we are dealing with a hex (0xXXXX) string
+      if (str->size()>2)
+        if(str->substr(0,2) != "0x" && base == 16){
+          base = 10; // reset to base 10
+          std::cout << " key '" << settingName << "' with string value '" << *str << "' does not appear to be a hex value, handling as base 10 instead." << std::endl;
+        }
+      settingValue = std::stoul(*str, nullptr, base); // TODO: handle exceptions and remaining, unconverted characters
+      std::cout << " key '" << settingName << "' with string value '" << *str << "' converted to value " << *settingValue << std::endl;
+    } else {
+      settingValue = boost::none;
+    }
+  } else {
+    // direction: WRITING
+    boost::optional<std::string> strvalue;
     if (base==10){
-      strvalue = std::to_string(settingValue);
+      strvalue = std::to_string(*settingValue);
     } else if (base==16){
       std::stringstream ss;
       ss << std::hex << std::showbase << settingValue; // might need e.g. std::setfill ('0') and std::setw(sizeof(your_type)*2)
@@ -70,31 +100,33 @@ template <class VALUE> void parseSetting(std::string settingName, pt::iptree *no
       throw std::out_of_range (std::string("Base value not implemented in parseSetting: ") + std::to_string(base));
     }
     // add key to ptree
-    node->put(settingName, strvalue);
-    std::cout << " value of key " << settingName << " with settings value '" << settingValue << "' has been stored in tree as '" << strvalue << "'" << std::endl;
+    parseSetting(settingName, node, strvalue, direction);
   }
-
 }
 
-template <class CAEN_ENUM, typename VALUE> void parseSetting(std::string settingName, pt::iptree *node, VALUE& settingValue, boost::bimap< std::string, CAEN_ENUM > map, parseDirection direction){
+template <class CAEN_ENUM, typename VALUE> void parseSetting(std::string settingName, pt::iptree *node, boost::optional<VALUE>& settingValue, boost::bimap< std::string, CAEN_ENUM > map, parseDirection direction){
   if (direction == parseDirection::READING){
-    // match the enum nanming convention in CAEN's driver
-    std::string str = "CAEN_DGTZ_";
+    boost::optional<std::string> str;
     // get the setting's value from the ptree and append
-    str += node->get<std::string>(settingName);
-    settingValue = iFindStringInBimap(map, str);
-    std::cout << " value of key " << settingName << " with value '" << node->get<std::string>(settingName) << "' converted to value " << settingValue << std::endl;
-    // erase value from ptree as it has been successfully parsed
-    // NOTE: this will only erase a single instance of the key; if the key exists several times, the other entries remain!
-    node->erase(settingName);
+    parseSetting(settingName, node, str, direction);
+    if (str){
+      settingValue = iFindStringInBimap(map, std::string("CAEN_DGTZ_") + *str); // match the enum nanming convention in CAEN's driver
+
+      std::cout << " value of key " << settingName << " with value '" << *str << "' converted to value " << *settingValue << " (" << map.right.at(static_cast<CAEN_ENUM>(*settingValue)) << ")" << std::endl;
+    } else {
+      settingValue = boost::none;
+    }
   } else {
+    // direction: WRITING
+
+    // check that setting's value (boost::optional) is actually set
+    if (!settingValue) return;
     // find the string corresponding to the setting's enum value in the bimap
-    std::string strvalue = map.right.at(static_cast<CAEN_ENUM>(settingValue));
+    boost::optional<std::string> strvalue = map.right.at(static_cast<CAEN_ENUM>(*settingValue));
     // remove the first part originating from CAEN's enum naming convention ("CAEN_DGTZ_")
-    strvalue.erase(0,10);
+    strvalue->erase(0,10);
     // add key to ptree
-    node->put(settingName, strvalue);
-    std::cout << " value of key " << settingName << " with settings value '" << settingValue << "' has been stored in tree as '" << strvalue << "'" << std::endl;
+    parseSetting(settingName, node, strvalue, direction);
   }
 }
 
@@ -107,10 +139,17 @@ template <class CAEN_ENUM, typename VALUE> void parseSetting(std::string setting
     }
 
     cadidaq::CaenEnum2str converter;
-    parseSetting("LinkType", node, settings->linkType, converter.bm_CAEN_DGTZ_ConnectionType, direction);
-    parseSetting("LinkNum", node, settings->linkNum, direction);
-    parseSetting("ConetNode", node, settings->conetNode, direction);
-    parseSetting("VMEBaseAddress", node, settings->vmeBaseAddress, direction, 16);
+    boost::optional<int> linkType;
+    boost::optional<int> linkNum;
+    boost::optional<int> conetNode;
+    boost::optional<uint32_t> vmeBaseAddress;
+
+    parseSetting("LinkType", node, linkType, converter.bm_CAEN_DGTZ_ConnectionType, direction);
+    parseSetting("LinkNum", node, linkNum, direction);
+    parseSetting("ConetNode", node, conetNode, direction);
+    parseSetting("VMEBaseAddress", node, vmeBaseAddress, direction, 16);
+
+
 
     std::cout << std::endl << "ptree after parsing (remaining entries are unparsed): " << std::endl;
     /* Loop over all sub sections and keys */
