@@ -8,7 +8,7 @@ list(APPEND CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake")
 
 # find boost library
 FIND_PACKAGE( Boost
-  COMPONENTS program_options
+  COMPONENTS program_options log
   REQUIRED)
 
 include_directories("${PROJECT_SOURCE_DIR}/include")
@@ -38,5 +38,7 @@ ADD_EXECUTABLE( cadidaq src/main.cpp ${PROJECT_BINARY_DIR}/CaenEnum2str.cpp)
 # enable c+11 and make it a requirement
 set_property(TARGET cadidaq PROPERTY CXX_STANDARD 11)
 set_property(TARGET cadidaq PROPERTY CXX_STANDARD_REQUIRED)
+# set dynamic linking for Boost::log (would otherwise result in linking errors e.g. on OSX, AppleClang 7.0.2.7000181, Boost 1.63)
+set_target_properties(cadidaq PROPERTIES COMPILE_DEFINITIONS "BOOST_LOG_DYN_LINK")
 
-TARGET_LINK_LIBRARIES( cadidaq Boost::program_options )
+TARGET_LINK_LIBRARIES( cadidaq Boost::program_options Boost::log)
