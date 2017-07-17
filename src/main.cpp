@@ -61,22 +61,59 @@ namespace po = boost::program_options;
 namespace pt = boost::property_tree;
 
 namespace cadidaq {
+  class settings;
+  class digitizerSettings;
   class connectionSettings;
 }
 
-class cadidaq::connectionSettings {
+class cadidaq::settings {
 public:
-  connectionSettings(){;}
+  settings(std::string name) :
+    name(name)
+  {}
+  ~settings(){;}
+  void parse(pt::iptree *node){processPTree(node, parseDirection::READING);}
+  pt::iptree* createPTree(){pt::iptree *node = new pt::iptree(); processPTree(node, parseDirection::WRITING); return node;}
+  virtual void verify(){};
+  void print(){
+    // convert all settings to a PTree
+    pt::iptree *node = createPTree();
+    std::cout << " Config for '" << name << "'" << std::endl;
+    /* Loop over all sub sections and keys */
+    for (auto& key : *node){
+      std::cout << "\t" << key.first << " = " << key.second.get_value<std::string>() << std::endl;
+    }
+    delete node;
+  };
+  std::string getName(){return name;}
+protected:
+  std::string name;
+  enum class parseDirection {READING, WRITING};
+  template <class CAEN_ENUM> boost::optional<CAEN_ENUM> iFindStringInBimap(boost::bimap< std::string, CAEN_ENUM > map, std::string str);
+  template <class VALUE> void parseSetting(std::string settingName, pt::iptree *node, boost::optional<VALUE>& settingValue, parseDirection direction);
+  template <class VALUE> void parseSetting(std::string settingName, pt::iptree *node, boost::optional<VALUE>& settingValue, parseDirection direction, int base);
+  template <class CAEN_ENUM, typename VALUE> void parseSetting(std::string settingName, pt::iptree *node, boost::optional<VALUE>& settingValue, boost::bimap< std::string, CAEN_ENUM > map, parseDirection direction);
+private:
+  virtual void processPTree(pt::iptree *node, parseDirection direction){};
+};
+
+class cadidaq::connectionSettings : public settings {
+public:
+  connectionSettings(std::string name) : cadidaq::settings(name) {}
   ~connectionSettings(){;}
+
+  void verify();
 
   boost::optional<int>      linkType;
   boost::optional<int>      linkNum;
   boost::optional<int>      conetNode;
   boost::optional<uint32_t> vmeBaseAddress;
+private:
+  virtual void processPTree(pt::iptree *node, parseDirection direction);
 };
 
 
-template <class CAEN_ENUM> boost::optional<CAEN_ENUM> iFindStringInBimap(boost::bimap< std::string, CAEN_ENUM > map, std::string str){
+template <class CAEN_ENUM> boost::optional<CAEN_ENUM> cadidaq::settings::iFindStringInBimap(boost::bimap< std::string, CAEN_ENUM > map, std::string str){
   typedef typename boost::bimap< std::string, CAEN_ENUM >::left_const_iterator const_iterator;
   for( const_iterator i = map.left.begin(), iend = map.left.end(); i != iend; ++i ){
       if(boost::iequals(boost::algorithm::to_lower_copy(i->first), str))
@@ -85,9 +122,8 @@ template <class CAEN_ENUM> boost::optional<CAEN_ENUM> iFindStringInBimap(boost::
   return boost::none;
 }
 
-enum class parseDirection {READING, WRITING};
 
-template <class VALUE> void parseSetting(std::string settingName, pt::iptree *node, boost::optional<VALUE>& settingValue, parseDirection direction){
+template <class VALUE> void cadidaq::settings::parseSetting(std::string settingName, pt::iptree *node, boost::optional<VALUE>& settingValue, parseDirection direction){
   if (direction == parseDirection::READING){
     // get the setting's value from the ptree
     settingValue = node->get_optional<VALUE>(settingName);
@@ -110,7 +146,7 @@ template <class VALUE> void parseSetting(std::string settingName, pt::iptree *no
   }
 }
 
-template <class VALUE> void parseSetting(std::string settingName, pt::iptree *node, boost::optional<VALUE>& settingValue, parseDirection direction, int base){
+template <class VALUE> void cadidaq::settings::parseSetting(std::string settingName, pt::iptree *node, boost::optional<VALUE>& settingValue, parseDirection direction, int base){
   if (direction == parseDirection::READING){
     // get the setting's value from the ptree
     boost::optional<std::string> str;
@@ -147,7 +183,7 @@ template <class VALUE> void parseSetting(std::string settingName, pt::iptree *no
   }
 }
 
-template <class CAEN_ENUM, typename VALUE> void parseSetting(std::string settingName, pt::iptree *node, boost::optional<VALUE>& settingValue, boost::bimap< std::string, CAEN_ENUM > map, parseDirection direction){
+template <class CAEN_ENUM, typename VALUE> void cadidaq::settings::parseSetting(std::string settingName, pt::iptree *node, boost::optional<VALUE>& settingValue, boost::bimap< std::string, CAEN_ENUM > map, parseDirection direction){
   if (direction == parseDirection::READING){
     boost::optional<std::string> str;
     // get the setting's value from the ptree and append
@@ -173,9 +209,24 @@ template <class CAEN_ENUM, typename VALUE> void parseSetting(std::string setting
   }
 }
 
-  void parseConnectionSettings(cadidaq::connectionSettings* settings, pt::iptree *node, std::string secname, parseDirection direction){
+
+void cadidaq::connectionSettings::verify(){
+
+  if (!linkType){
+    std::cout << "Missing (or invalid) non-optional setting 'LinkType' in section '" << name << "'" << std::endl;
+    throw std::invalid_argument(std::string("Missing (or invalid) setting for 'LinkType'"));
+  }
+  if (*linkType == CAEN_DGTZ_USB){
+    if (conetNode && *conetNode != 0)
+      std::cout << "When using LinkType=USB, set ConetNode to '0'! Fixed." << std::endl;
+    conetNode = 0;
+  }
+
+}
+
+void cadidaq::connectionSettings::processPTree(pt::iptree *node, parseDirection direction){
     // this routine implements the calls to ParseSetting for individual settings read from config or stored internally
-    std::cout << "Parsing ptree for digitizer section '" << secname << "'" << std::endl;
+    std::cout << "Parsing ptree for configuration of '" << name << "'" << std::endl;
     /* Loop over all sub sections and keys */
     for (auto& key : *node){
       std::cout << "\t" << key.first << " = " << key.second.get_value<std::string>() << std::endl;
@@ -183,10 +234,10 @@ template <class CAEN_ENUM, typename VALUE> void parseSetting(std::string setting
 
     cadidaq::CaenEnum2str converter;
 
-    parseSetting("LinkType", node, settings->linkType, converter.bm_CAEN_DGTZ_ConnectionType, direction);
-    parseSetting("LinkNum", node, settings->linkNum, direction);
-    parseSetting("ConetNode", node, settings->conetNode, direction);
-    parseSetting("VMEBaseAddress", node, settings->vmeBaseAddress, direction, 16);
+    parseSetting("LinkType", node, linkType, converter.bm_CAEN_DGTZ_ConnectionType, direction);
+    parseSetting("LinkNum", node, linkNum, direction);
+    parseSetting("ConetNode", node, conetNode, direction);
+    parseSetting("VMEBaseAddress", node, vmeBaseAddress, direction, 16);
 
     // TODO: this should probably be warnings when reading and debug info when writing
     std::cout << std::endl << "ptree after parsing (remaining entries are unparsed): " << std::endl;
@@ -194,20 +245,8 @@ template <class CAEN_ENUM, typename VALUE> void parseSetting(std::string setting
     for (auto& key : *node){
       std::cout << "\t" << key.first << " = " << key.second.get_value<std::string>() << std::endl;
     }
-
-    // now verify parameter in case we are reading them from file
-    if (direction == parseDirection::READING){
-      if (!settings->linkType){
-        std::cout << "Missing (or invalid) non-optional setting 'LinkType' in section '" << secname << "'" << std::endl;
-        throw std::invalid_argument(std::string("Missing (or invalid) setting for 'LinkType'"));
-      }
-      if (*settings->linkType == CAEN_DGTZ_USB){
-        if (settings->conetNode && *settings->conetNode != 0)
-          std::cout << "When using LinkType=USB, set ConetNode to '0'! Fixed." << std::endl;
-        settings->conetNode = 0;
-      }
-    }
   }
+
 
 void read_ini_file(const char *filename)
 {
@@ -246,19 +285,17 @@ void read_ini_file(const char *filename)
       if(boost::iequals(boost::algorithm::to_lower_copy(section.first), std::string("general")))
         continue;
       pt::iptree &node = iniPTree.get_child(section.first);
-      cadidaq::connectionSettings* settings = new cadidaq::connectionSettings();
-      parseConnectionSettings(settings, &node, section.first, parseDirection::READING);
+      cadidaq::connectionSettings* settings = new cadidaq::connectionSettings(section.first);
+      settings->parse(&node);
+      settings->verify();
       vecSettings.push_back(settings);
     }
 
     // write the config back to another file
     pt::iptree ptwrite; // create a new tree
-    int it = 0;
     BOOST_FOREACH(cadidaq::connectionSettings *settings, vecSettings){
-      pt::iptree node;
-      parseConnectionSettings(settings, &node, "digi" + std::to_string(it), parseDirection::WRITING);
-      ptwrite.put_child("digi" + std::to_string(it), node);
-      it++;
+      pt::iptree *node = settings->createPTree();
+      ptwrite.put_child(settings->getName(), *node);
     }
     pt::ini_parser::write_ini("output.ini", ptwrite);
 }
