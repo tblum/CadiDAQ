@@ -1,3 +1,7 @@
+// settings.hpp
+#ifndef CADIDAQ_SETTINGS_H
+#define CADIDAQ_SETTINGS_H
+
 #include <boost/property_tree/ptree.hpp>
 #include <boost/optional.hpp>
 
@@ -49,3 +53,5 @@ public:
 private:
   virtual void processPTree(pt::iptree *node, parseDirection direction);
 };
+
+#endif
