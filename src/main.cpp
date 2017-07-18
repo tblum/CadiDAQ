@@ -71,6 +71,10 @@ void read_ini_file(const char *filename)
       cadidaq::connectionSettings* settings = new cadidaq::connectionSettings(section.first);
       settings->parse(&node);
       settings->verify();
+      /* Loop over all sub sections and keys that remained after parsing */
+      for (auto& key : node){
+        MAIN_LOG_WARN << "Unknown setting in section " << section.first << " ignored: \t" << key.first << " = " << key.second.get_value<std::string>();
+      }
       vecSettings.push_back(settings);
     }
 

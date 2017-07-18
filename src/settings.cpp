@@ -181,12 +181,7 @@ void cadidaq::connectionSettings::processPTree(pt::iptree *node, parseDirection 
     parseSetting("LinkNum", node, linkNum, direction);
     parseSetting("ConetNode", node, conetNode, direction);
     parseSetting("VMEBaseAddress", node, vmeBaseAddress, direction, 16);
+    CFG_LOG_DEBUG << "Done with processing connection settings ptree";
 
-    if (direction == parseDirection::READING){
-      /* Loop over all sub sections and keys that remained after parsing */
-      for (auto& key : *node){
-        CFG_LOG_WARN << "Unknown setting ignored: \t" << key.first << " = " << key.second.get_value<std::string>();
-      }
-    }
   }
 
