@@ -33,7 +33,10 @@ enum2str_generate(
 include_directories("${PROJECT_BINARY_DIR}")
 
 # main executable
-ADD_EXECUTABLE( cadidaq src/main.cpp ${PROJECT_BINARY_DIR}/CaenEnum2str.cpp)
+ADD_EXECUTABLE( cadidaq
+  src/main.cpp
+  src/logging.cpp
+  ${PROJECT_BINARY_DIR}/CaenEnum2str.cpp)
 
 # enable c+11 and make it a requirement
 set_property(TARGET cadidaq PROPERTY CXX_STANDARD 11)
