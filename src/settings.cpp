@@ -71,9 +71,9 @@ template <class VALUE> void cadidaq::settings::parseSetting(std::string settingN
     // get the setting's value from the ptree
     settingValue = node->get_optional<VALUE>(settingName);
     if (settingValue) {
-      CFG_LOG_DEBUG << "found key " << settingName << " with value '" << *settingValue << "'" << std::endl;
+      CFG_LOG_DEBUG << "found key " << settingName << " with value '" << *settingValue << "'";
     } else {
-      CFG_LOG_DEBUG << "could not find key '" << settingName << "'" << std::endl;
+      CFG_LOG_DEBUG << "could not find key '" << settingName << "'";
     }
     // erase value from ptree as it has been successfully parsed
     // NOTE: this will only erase a single instance of the key; if the key exists several times, the other entries remain!
@@ -84,7 +84,7 @@ template <class VALUE> void cadidaq::settings::parseSetting(std::string settingN
     if (settingValue) {
       node->put(settingName, *settingValue);
     } else {
-      CFG_LOG_WARN << "missing key '" << settingName << "' when generating config ptree " << std::endl;
+      CFG_LOG_WARN << "missing key '" << settingName << "' when generating config ptree ";
     }
   }
 }
@@ -134,7 +134,7 @@ template <class CAEN_ENUM, typename VALUE> void cadidaq::settings::parseSetting(
     if (str){
       settingValue = iFindStringInBimap(map, std::string("CAEN_DGTZ_") + *str); // match the enum nanming convention in CAEN's driver
 
-      CFG_LOG_DEBUG << " value of key " << settingName << " with value '" << *str << "' converted to value " << *settingValue << " (" << map.right.at(static_cast<CAEN_ENUM>(*settingValue)) << ")" << std::endl;
+      CFG_LOG_DEBUG << " value of key " << settingName << " with value '" << *str << "' converted to value " << *settingValue << " (" << map.right.at(static_cast<CAEN_ENUM>(*settingValue)) << ")";
     } else {
       settingValue = boost::none;
     }
@@ -156,24 +156,24 @@ template <class CAEN_ENUM, typename VALUE> void cadidaq::settings::parseSetting(
 void cadidaq::connectionSettings::verify(){
 
   if (!linkType){
-    std::cout << "Missing (or invalid) non-optional setting 'LinkType' in section '" << name << "'" << std::endl;
+    CFG_LOG_ERROR << "Missing (or invalid) non-optional setting 'LinkType' in section '" << name << "'";
     throw std::invalid_argument(std::string("Missing (or invalid) setting for 'LinkType'"));
   }
   if (*linkType == CAEN_DGTZ_USB){
-    if (conetNode && *conetNode != 0)
-      std::cout << "When using LinkType=USB, set ConetNode to '0'! Fixed." << std::endl;
+    if (conetNode && *conetNode != 0){
+      CFG_LOG_DEBUG << "When using LinkType=USB, ConetNode needs to be '0'! Fixed.";
+    }
+    if (vmeBaseAddress && *vmeBaseAddress != 0){
+      CFG_LOG_DEBUG << "When using LinkType=USB, VMEBaseAddress needs to be '0'! Fixed.";
+    }
+    // set the correct values for the chosen linktype
     conetNode = 0;
+    vmeBaseAddress = 0;
   }
-
 }
 
 void cadidaq::connectionSettings::processPTree(pt::iptree *node, parseDirection direction){
     // this routine implements the calls to ParseSetting for individual settings read from config or stored internally
-    std::cout << "Parsing ptree for configuration of '" << name << "'" << std::endl;
-    /* Loop over all sub sections and keys */
-    for (auto& key : *node){
-      std::cout << "\t" << key.first << " = " << key.second.get_value<std::string>() << std::endl;
-    }
 
     cadidaq::CaenEnum2str converter;
 
@@ -182,11 +182,11 @@ void cadidaq::connectionSettings::processPTree(pt::iptree *node, parseDirection 
     parseSetting("ConetNode", node, conetNode, direction);
     parseSetting("VMEBaseAddress", node, vmeBaseAddress, direction, 16);
 
-    // TODO: this should probably be warnings when reading and debug info when writing
-    std::cout << std::endl << "ptree after parsing (remaining entries are unparsed): " << std::endl;
-    /* Loop over all sub sections and keys */
-    for (auto& key : *node){
-      std::cout << "\t" << key.first << " = " << key.second.get_value<std::string>() << std::endl;
+    if (direction == parseDirection::READING){
+      /* Loop over all sub sections and keys that remained after parsing */
+      for (auto& key : *node){
+        CFG_LOG_WARN << "Unknown setting ignored: \t" << key.first << " = " << key.second.get_value<std::string>();
+      }
     }
   }
 
