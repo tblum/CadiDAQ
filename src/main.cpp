@@ -13,6 +13,8 @@
 #include <boost/algorithm/string.hpp>
 #include <boost/foreach.hpp>
 
+#include <boolTranslator.hpp> // changes 'bool' interpretation in ptrees
+
 #include <logging.hpp>
 #include <settings.hpp>
 
@@ -60,7 +62,7 @@ void read_ini_file(const char *filename)
     }
     std::cout << "Configuration for " << NDigitizer << " digitizer(s) found in config file." << std::endl;
 
-    std::vector<cadidaq::connectionSettings*> vecSettings;
+    std::vector<cadidaq::connectionSettings*> vecLnkSettings;
     // get the connection details for each digitizer section
     for (auto& section : iniPTree){
       if(boost::iequals(boost::algorithm::to_lower_copy(section.first), std::string("daq")))
@@ -68,19 +70,24 @@ void read_ini_file(const char *filename)
       if(boost::iequals(boost::algorithm::to_lower_copy(section.first), std::string("general")))
         continue;
       pt::iptree &node = iniPTree.get_child(section.first);
-      cadidaq::connectionSettings* settings = new cadidaq::connectionSettings(section.first);
-      settings->parse(&node);
-      settings->verify();
+      cadidaq::connectionSettings* linksettings = new cadidaq::connectionSettings(section.first);
+      linksettings->parse(&node);
+      linksettings->verify();
+      // TODO: establish connection, determine number of available channels
+      uint nchannels = 32;
+      cadidaq::registerSettings* regsettings = new cadidaq::registerSettings(section.first, nchannels);
+      regsettings->parse(&node);
+      regsettings->verify();
       /* Loop over all sub sections and keys that remained after parsing */
       for (auto& key : node){
         MAIN_LOG_WARN << "Unknown setting in section " << section.first << " ignored: \t" << key.first << " = " << key.second.get_value<std::string>();
       }
-      vecSettings.push_back(settings);
+      vecLnkSettings.push_back(linksettings);
     }
 
     // write the config back to another file
     pt::iptree ptwrite; // create a new tree
-    BOOST_FOREACH(cadidaq::connectionSettings *settings, vecSettings){
+    BOOST_FOREACH(cadidaq::connectionSettings *settings, vecLnkSettings){
       pt::iptree *node = settings->createPTree();
       ptwrite.put_child(settings->getName(), *node);
     }
