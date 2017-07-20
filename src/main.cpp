@@ -63,6 +63,7 @@ void read_ini_file(const char *filename)
     std::cout << "Configuration for " << NDigitizer << " digitizer(s) found in config file." << std::endl;
 
     std::vector<cadidaq::connectionSettings*> vecLnkSettings;
+    std::vector<cadidaq::registerSettings*> vecRegSettings;
     // get the connection details for each digitizer section
     for (auto& section : iniPTree){
       if(boost::iequals(boost::algorithm::to_lower_copy(section.first), std::string("daq")))
@@ -83,11 +84,16 @@ void read_ini_file(const char *filename)
         MAIN_LOG_WARN << "Unknown setting in section " << section.first << " ignored: \t" << key.first << " = " << key.second.get_value<std::string>();
       }
       vecLnkSettings.push_back(linksettings);
+      vecRegSettings.push_back(regsettings);
     }
 
     // write the config back to another file
     pt::iptree ptwrite; // create a new tree
     BOOST_FOREACH(cadidaq::connectionSettings *settings, vecLnkSettings){
+      pt::iptree *node = settings->createPTree();
+      ptwrite.put_child(settings->getName(), *node);
+    }
+    BOOST_FOREACH(cadidaq::registerSettings *settings, vecRegSettings){
       pt::iptree *node = settings->createPTree();
       ptwrite.put_child(settings->getName(), *node);
     }
