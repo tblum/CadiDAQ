@@ -47,7 +47,6 @@ struct hexTranslator
             // treat as number
             try{
               i = boost::lexical_cast<int>(str);
-              std::cout << "and converted that to" << std::to_string(i) << std::endl;
             }
             catch (boost::bad_lexical_cast){
               return boost::optional<external_type>(boost::none);
