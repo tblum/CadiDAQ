@@ -94,8 +94,8 @@ void read_ini_file(const char *filename)
       ptwrite.put_child(settings->getName(), *node);
     }
     BOOST_FOREACH(cadidaq::registerSettings *settings, vecRegSettings){
-      pt::iptree *node = settings->createPTree();
-      ptwrite.put_child(settings->getName(), *node);
+      pt::iptree &node = ptwrite.get_child(settings->getName());
+      settings->fillPTree(&node);
     }
     pt::ini_parser::write_ini("output.ini", ptwrite);
 }
