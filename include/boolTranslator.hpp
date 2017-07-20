@@ -6,7 +6,6 @@
 #define CADIDAQ_boolTranslator_hpp
 
 #include <boost/property_tree/ptree.hpp>
-#include <boost/property_tree/exceptions.hpp>
 #include <boost/algorithm/string/predicate.hpp>
 
 // Custom translator for bool (only supports std::string)
@@ -27,7 +26,7 @@ struct BoolTranslator
             else if (iequals(str, "false") || str == "f" || iequals(str, "no") || iequals(str, "off") || str == "0")
               return boost::optional<external_type>(false);
             else
-              throw boost::property_tree::ptree_bad_data("Cannot translate string to boolean value", str);
+              return boost::optional<external_type>(boost::none);
         }
         else
             return boost::optional<external_type>(boost::none);
