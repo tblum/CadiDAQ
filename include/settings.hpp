@@ -25,6 +25,7 @@ public:
   ~settings(){;}
   void parse(pt::iptree *node);
   pt::iptree* createPTree();
+  void fillPTree(pt::iptree *node);
   virtual void verify(){};
   void print();
   std::string getName(){return name;}
@@ -32,10 +33,10 @@ protected:
   std::string name;
   boost::log::sources::severity_channel_logger< boost::log::trivial::severity_level, std::string > lg;
   enum class parseDirection {READING, WRITING};
+  enum class defaultBase {NONE, HEX};
+  template <class VALUE> void parseSetting(std::string settingName, pt::iptree *node, boost::optional<VALUE>& settingValue, parseDirection direction, defaultBase = defaultBase::HEX);
+  template <class VALUE> void parseSetting(std::string settingName, pt::iptree *node, std::vector<boost::optional<VALUE>>& settingValue, parseDirection direction, defaultBase = defaultBase::HEX);
   template <class CAEN_ENUM> boost::optional<CAEN_ENUM> iFindStringInBimap(boost::bimap< std::string, CAEN_ENUM > map, std::string str);
-  template <class VALUE> void parseSetting(std::string settingName, pt::iptree *node, std::vector<boost::optional<VALUE>>& settingValue, parseDirection direction);
-  template <class VALUE> void parseSetting(std::string settingName, pt::iptree *node, boost::optional<VALUE>& settingValue, parseDirection direction);
-  template <class VALUE> void parseSetting(std::string settingName, pt::iptree *node, boost::optional<VALUE>& settingValue, parseDirection direction, int base);
   template <class CAEN_ENUM, typename VALUE> void parseSetting(std::string settingName, pt::iptree *node, boost::optional<VALUE>& settingValue, boost::bimap< std::string, CAEN_ENUM > map, parseDirection direction);
 private:
   virtual void processPTree(pt::iptree *node, parseDirection direction){};
