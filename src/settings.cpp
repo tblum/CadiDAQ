@@ -98,18 +98,18 @@ template <class VALUE> void cadidaq::settings::parseSetting(std::string settingN
 template <class VALUE> void cadidaq::settings::parseSetting(std::string settingName, pt::iptree *node, std::vector<boost::optional<VALUE>>& settingValue, parseDirection direction){
   if (direction == parseDirection::READING){
     // get the setting's value from the ptree by looping over all entries of "settingName[RANGE]"
-    /* Loop over all sub sections and keys that remained after parsing */
-    for (auto& key : *node){
-      if (boost::istarts_with(key.first, settingName)){
-        CFG_LOG_DEBUG << "Found a matching key: '" << key.first << "' with value '" << key.second.get_value<std::string>() << "'";
-        std::string range = boost::erase_head_copy(key.first, settingName.length());
+    // important: to keep the iteration stable even when erasing parsed entries, the iterator increment is handled below
+    for (auto key = node->begin(); key != node->end();){
+      if (boost::istarts_with(key->first, settingName)){
+        CFG_LOG_DEBUG << "Found a matching key: '" << key->first << "' with value '" << key->second.get_value<std::string>() << "'";
+        std::string range = boost::erase_head_copy(key->first, settingName.length());
         // remove the brackets or parenthesis and any remaining whitespace
         boost::trim_left_if(range,boost::is_any_of("[("));
         boost::trim_right_if(range,boost::is_any_of(")]"));
         boost::erase_all(range," ");
         // make sure that there are no characters present that we can't parse
         if (!boost::all(range,boost::is_any_of(",-")||boost::is_digit() || boost::is_space())){
-          CFG_LOG_ERROR << "Could not parse range '" << range << "' specified in setting '" << key.first << "' with value '" << key.second.get_value<std::string>() << "'. Only allowed characters are '-', ',' and digits.";
+          CFG_LOG_ERROR << "Could not parse range '" << range << "' specified in setting '" << key->first << "' with value '" << key->second.get_value<std::string>() << "'. Only allowed characters are '-', ',' and digits.";
           continue;
         }
         // now split the range into individual channel numbers
@@ -120,7 +120,6 @@ template <class VALUE> void cadidaq::settings::parseSetting(std::string settingN
 
         for (auto it:strs){
             boost::split(r,it,boost::is_any_of("-"));
-
             auto x = r.begin();
             low = high =boost::lexical_cast<int>(r[0]);
             x++;
@@ -139,26 +138,33 @@ template <class VALUE> void cadidaq::settings::parseSetting(std::string settingN
         // loop over parsed range and set the values in the settings vector
         for(auto x:v){
           try{
-            settingValue.at(x) = key.second.get_value<VALUE>();
+            settingValue.at(x) = key->second.get_value<VALUE>();
           }
           catch (const std::out_of_range& e) {
             CFG_LOG_ERROR << "Channel number '" << std::to_string(x) << "' in setting '" << settingName << "' is out of range!";
+            continue;
+          }
+          catch (const pt::ptree_bad_data& e) {
+            CFG_LOG_ERROR << "Error parsing setting '" << settingName << "': " << e.what() << ". Offending value: " << key->second.get_value<std::string>();
+            break;
           }
         }
 
         // erase the now-parsed key from the ptree node
-        node->erase(key.first);
-        }
+        key = node->erase(key);
+      } // match settingName*
+      else {
+        ++key;
+      }
     } // for (key:node)
   } else {
     // direction: WRITING
-    // TODO: write key for vector's iterator to loop over all channels
     // TODO: write range compression to get setting string as in "settingName[RANGE]"
     // add key to ptree if the setting's value has been set
     for (auto it = settingValue.begin(); it != settingValue.end(); ++it) {
       auto index = std::distance(settingValue.begin(), it);
       if (*it) {
-        node->put(settingName + "[" + std::to_string(index) + "]", *it);
+        node->put(settingName + "[" + std::to_string(index) + "]", **it);
       } else {
         CFG_LOG_WARN << "Value for '" << settingName << "' not defined for channel #" << std::to_string(index) << " when generating configuration property tree. Setting will be omitted in output.";
       }
