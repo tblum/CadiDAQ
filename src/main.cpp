@@ -8,12 +8,17 @@
 #include <iomanip>   // std::hex
 #include <stdexcept> // exceptions
 
+#include <bitset>
+#include <iterator>  // distance
+
 #include <boost/property_tree/ini_parser.hpp>
 #include <boost/program_options.hpp>
 #include <boost/algorithm/string.hpp>
 #include <boost/foreach.hpp>
 
 #include <boolTranslator.hpp> // changes 'bool' interpretation in ptrees
+
+#include "caen.hpp"
 
 #include <logging.hpp>
 #include <settings.hpp>
@@ -32,6 +37,46 @@ namespace pt = boost::property_tree;
 #define MAIN_LOG_FATAL                                          \
   BOOST_LOG_CHANNEL_SEV(lg, "main", boost::log::trivial::fatal)
 
+
+//
+// programming configuration into digitizer
+//
+
+/* converts a vector of optional<bool> into a uint32 bit mask.
+ defaults to 0 if optional not set */
+  uint32_t vec2Mask(std::vector<boost::optional<bool>> vec, uint groupsize = 1){
+    std::bitset<32> mask(0);
+    for (auto it = vec.begin(); it != vec.end(); ++it) {
+      auto index = std::distance(vec.begin(), it);
+      // set value if set and 'true' (else it stays 0)
+      if (*it && **it) {
+        uint groupidx = index%groupsize;
+        // treat "special case" of all channels belonging to the same group (e.g. no groups, just channels)
+        if (groupsize == 1)
+          groupidx = index;
+        // create a bit pattern for the group the channel belongs to
+        uint32_t shift = (((uint32_t)1 << groupsize) - 1) << groupidx;
+        // set that pattern
+        mask |= shift;
+      }
+    }
+    return mask.to_ulong();
+  }
+
+template <typename T> void programWrapper(caen::Digitizer* instance, void (caen::Digitizer::*write)(T), T (caen::Digitizer::*read)(), T value){
+  (instance->*write)(value);
+  T test = (instance->*read)();
+  std::cout << std::to_string(test) << std::endl;
+}
+
+
+void programSettings(caen::Digitizer* digitizer, cadidaq::registerSettings* settings){
+  program(digitizer, &caen::Digitizer::writeTestMask, &caen::Digitizer::readTestMask, vec2Mask(settings->chEnable));
+}
+
+//
+// reading config file
+//
 
 void read_ini_file(const char *filename)
 {
@@ -74,11 +119,13 @@ void read_ini_file(const char *filename)
       cadidaq::connectionSettings* linksettings = new cadidaq::connectionSettings(section.first);
       linksettings->parse(&node);
       linksettings->verify();
-      // TODO: establish connection, determine number of available channels
-      uint nchannels = 32;
+      // TODO: actually establish connection (not using dummy as of now), determine number of available channels
+      caen::Digitizer* digitizer = caen::Digitizer::USB(0);
+      uint nchannels = digitizer->channels();
       cadidaq::registerSettings* regsettings = new cadidaq::registerSettings(section.first, nchannels);
       regsettings->parse(&node);
       regsettings->verify();
+      programSettings(digitizer, regsettings);
       /* Loop over all sub sections and keys that remained after parsing */
       for (auto& key : node){
         MAIN_LOG_WARN << "Unknown setting in section " << section.first << " ignored: \t" << key.first << " = " << key.second.get_value<std::string>();
