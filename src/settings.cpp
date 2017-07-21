@@ -35,6 +35,39 @@
 #define CFG_LOG_FATAL                                           \
   BOOST_LOG_CHANNEL_SEV(lg, "cfg", boost::log::trivial::fatal)
 
+//
+// Helper functions
+//
+
+/* expandRange(): splits a comma-separated list of values and ranges into
+   individual values, returns these as vector */
+  std::vector<int> expandRange(std::string range){
+// clean input of spaces
+    boost::erase_all(range," ");
+    // helper vars
+    std::vector<std::string> strs,r;
+    std::vector<int> v;
+    int low,high,i;
+    // split string
+    boost::split(strs,range,boost::is_any_of(","));
+    // expand values
+    for (auto it:strs){
+      boost::split(r,it,boost::is_any_of("-"));
+      auto x = r.begin();
+      low = high =boost::lexical_cast<int>(r[0]);
+      x++;
+      if(x!=r.end())
+        high = boost::lexical_cast<int>(r[1]);
+      for(i=low;i<=high;++i)
+        v.push_back(i);
+    }
+    return v;
+  }
+
+
+//
+// Class implementation
+//
 
 cadidaq::settings::settings(std::string name) : name(name)
 {
@@ -114,6 +147,7 @@ template <class VALUE> void cadidaq::settings::parseSetting(std::string settingN
   }
 }
 
+
 template <class VALUE> void cadidaq::settings::parseSetting(std::string settingName, pt::iptree *node, std::vector<boost::optional<VALUE>>& settingValue, parseDirection direction, defaultBase base){
   if (direction == parseDirection::READING){
     // get the setting's value from the ptree by looping over all entries of "settingName[RANGE]"
@@ -125,28 +159,13 @@ template <class VALUE> void cadidaq::settings::parseSetting(std::string settingN
         // remove the brackets or parenthesis and any remaining whitespace
         boost::trim_left_if(range,boost::is_any_of("[("));
         boost::trim_right_if(range,boost::is_any_of(")]"));
-        boost::erase_all(range," ");
         // make sure that there are no characters present that we can't parse
         if (!boost::all(range,boost::is_any_of(",-")||boost::is_digit() || boost::is_space())){
           CFG_LOG_ERROR << "Could not parse range '" << range << "' specified in setting '" << key->first << "' with value '" << key->second.get_value<std::string>() << "'. Only allowed characters are '-', ',' and digits.";
           continue;
         }
         // now split the range into individual channel numbers
-        std::vector<std::string> strs,r;
-        std::vector<int> v;
-        int low,high,i;
-        boost::split(strs,range,boost::is_any_of(","));
-
-        for (auto it:strs){
-            boost::split(r,it,boost::is_any_of("-"));
-            auto x = r.begin();
-            low = high =boost::lexical_cast<int>(r[0]);
-            x++;
-            if(x!=r.end())
-              high = boost::lexical_cast<int>(r[1]);
-            for(i=low;i<=high;++i)
-              v.push_back(i);
-          }
+        std::vector<int> v = expandRange(range);
 
         // output the parsed range for debugging purposes
         std::stringstream expandedrange;
