@@ -34,13 +34,14 @@ protected:
   boost::log::sources::severity_channel_logger< boost::log::trivial::severity_level, std::string > lg;
   enum class parseDirection {READING, WRITING};
   enum class defaultBase {NONE, HEX};
-  template <class VALUE> void parseSetting(std::string settingName, pt::iptree *node, boost::optional<VALUE>& settingValue, parseDirection direction, defaultBase = defaultBase::HEX);
-  template <class VALUE> void parseSetting(std::string settingName, pt::iptree *node, std::vector<boost::optional<VALUE>>& settingValue, parseDirection direction, defaultBase = defaultBase::HEX);
+  template <class VALUE> void parseSetting(std::string settingName, pt::iptree *node, boost::optional<VALUE>& settingValue, parseDirection direction, defaultBase = defaultBase::NONE);
+  template <class VALUE> void parseSetting(std::string settingName, pt::iptree *node, std::vector<boost::optional<VALUE>>& settingValue, parseDirection direction, defaultBase = defaultBase::NONE);
   template <class CAEN_ENUM> boost::optional<CAEN_ENUM> iFindStringInBimap(boost::bimap< std::string, CAEN_ENUM > map, std::string str);
   template <class CAEN_ENUM, typename VALUE> void parseSetting(std::string settingName, pt::iptree *node, boost::optional<VALUE>& settingValue, boost::bimap< std::string, CAEN_ENUM > map, parseDirection direction);
 private:
   virtual void processPTree(pt::iptree *node, parseDirection direction){};
 };
+
 
 class cadidaq::connectionSettings : public settings {
 public:
