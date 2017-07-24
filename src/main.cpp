@@ -63,15 +63,30 @@ namespace pt = boost::property_tree;
     return mask.to_ulong();
   }
 
-template <typename T> void programWrapper(caen::Digitizer* instance, void (caen::Digitizer::*write)(T), T (caen::Digitizer::*read)(), T value){
-  (instance->*write)(value);
-  T test = (instance->*read)();
-  std::cout << std::to_string(test) << std::endl;
+enum class comDirection {READING, WRITING};
+
+template <typename T> void programWrapper(caen::Digitizer* instance, void (caen::Digitizer::*write)(T), T (caen::Digitizer::*read)(), T value, comDirection direction){
+  if (direction == comDirection::WRITING){
+    try{
+      (instance->*write)(value);
+    }
+    catch (caen::Error& e){
+      MAIN_LOG_ERROR << "Caught exception when communicating with digitizer " << instance->modelName() << ", serial " << instance->serialNumber() << ": " << e.what();
+    }
+ } else {
+    // READING
+    try{
+      T test = (instance->*read)();
+    }
+    catch (caen::Error& e){
+      MAIN_LOG_ERROR << "Caught exception when communicating with digitizer " << instance->modelName() << ", serial " << instance->serialNumber() << ": " << e.what();
+    }
+  }
 }
 
 
-void programSettings(caen::Digitizer* digitizer, cadidaq::registerSettings* settings){
-  program(digitizer, &caen::Digitizer::writeTestMask, &caen::Digitizer::readTestMask, vec2Mask(settings->chEnable));
+void programSettings(caen::Digitizer* digitizer, cadidaq::registerSettings* settings, comDirection direction){
+  programWrapper(digitizer, &caen::Digitizer::setChannelEnableMask, &caen::Digitizer::getChannelEnableMask, vec2Mask(settings->chEnable), direction);
 }
 
 //
@@ -120,12 +135,22 @@ void read_ini_file(const char *filename)
       linksettings->parse(&node);
       linksettings->verify();
       // TODO: actually establish connection (not using dummy as of now), determine number of available channels
-      caen::Digitizer* digitizer = caen::Digitizer::USB(0);
+      caen::Digitizer* digitizer = nullptr;
+      try{
+        digitizer = caen::Digitizer::USB(0);
+      }
+      catch (caen::Error& e){
+        MAIN_LOG_ERROR << "Caught exception when establishing communication with digitizer " << linksettings->getName() << ": " << e.what();
+        if (!digitizer){
+          // won't be able to handle this; TODO: more fine-grained error handling
+          exit(EXIT_FAILURE);
+        }
+      }
       uint nchannels = digitizer->channels();
       cadidaq::registerSettings* regsettings = new cadidaq::registerSettings(section.first, nchannels);
       regsettings->parse(&node);
       regsettings->verify();
-      programSettings(digitizer, regsettings);
+      programSettings(digitizer, regsettings, comDirection::WRITING);
       /* Loop over all sub sections and keys that remained after parsing */
       for (auto& key : node){
         MAIN_LOG_WARN << "Unknown setting in section " << section.first << " ignored: \t" << key.first << " = " << key.second.get_value<std::string>();
