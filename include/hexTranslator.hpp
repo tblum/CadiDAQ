@@ -26,6 +26,7 @@ struct hexTranslator
           if (boost::istarts_with(str, "0x")){
             // treat as hex
             std::size_t* pos;
+            std::size_t length = str.length();
             try{
               i = std::stoi(str, pos, 16);
               }
@@ -39,7 +40,7 @@ struct hexTranslator
               // to ERANGE.
               return boost::optional<external_type>(boost::none);
             }
-            if (*pos != str.length()){
+            if (*pos != length){
               // not all characters have been converted
               return boost::optional<external_type>(boost::none);
             }
