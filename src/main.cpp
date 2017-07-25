@@ -23,6 +23,8 @@
 #include <logging.hpp>
 #include <settings.hpp>
 
+#include <helper.hpp>       // CadiDAQ helper functions
+
 namespace po = boost::program_options;
 namespace pt = boost::property_tree;
 
@@ -42,51 +44,61 @@ namespace pt = boost::property_tree;
 // programming configuration into digitizer
 //
 
-/* converts a vector of optional<bool> into a uint32 bit mask.
- defaults to 0 if optional not set */
-  uint32_t vec2Mask(std::vector<boost::optional<bool>> vec, uint groupsize = 1){
-    std::bitset<32> mask(0);
-    for (auto it = vec.begin(); it != vec.end(); ++it) {
-      auto index = std::distance(vec.begin(), it);
-      // set value if set and 'true' (else it stays 0)
-      if (*it && **it) {
-        uint groupidx = index%groupsize;
-        // treat "special case" of all channels belonging to the same group (e.g. no groups, just channels)
-        if (groupsize == 1)
-          groupidx = index;
-        // create a bit pattern for the group the channel belongs to
-        uint32_t shift = (((uint32_t)1 << groupsize) - 1) << groupidx;
-        // set that pattern
-        mask |= shift;
-      }
-    }
-    return mask.to_ulong();
-  }
 
 enum class comDirection {READING, WRITING};
 
-template <typename T> void programWrapper(caen::Digitizer* instance, void (caen::Digitizer::*write)(T), T (caen::Digitizer::*read)(), T value, comDirection direction){
-  if (direction == comDirection::WRITING){
-    try{
+template <typename T> void programWrapper(caen::Digitizer* instance, void (caen::Digitizer::*write)(T), T (caen::Digitizer::*read)(), T &value, comDirection direction){
+  try{
+    if (direction == comDirection::WRITING){
+      // WRITING
       (instance->*write)(value);
-    }
-    catch (caen::Error& e){
-      MAIN_LOG_ERROR << "Caught exception when communicating with digitizer " << instance->modelName() << ", serial " << instance->serialNumber() << ": " << e.what();
-    }
- } else {
-    // READING
-    try{
+    } else {
+      // READING
       T test = (instance->*read)();
     }
-    catch (caen::Error& e){
-      MAIN_LOG_ERROR << "Caught exception when communicating with digitizer " << instance->modelName() << ", serial " << instance->serialNumber() << ": " << e.what();
-    }
   }
+  catch (caen::Error& e){
+    // TODO: more fine-grained error handling, more info on log
+    MAIN_LOG_ERROR << "Caught exception when communicating with digitizer " << instance->modelName() << ", serial " << instance->serialNumber() << ": " << e.what();
+  }
+}
+
+template <typename T> void programWrapper(caen::Digitizer* instance, void (caen::Digitizer::*write)(T), T (caen::Digitizer::*read)(), boost::optional<T> &value, comDirection direction){
+  // simple additional check to program only if:
+  // - optional value is set
+  // - or the value is being read out from the digitizer
+  if (value){
+    programWrapper(instance, write, read, *value, direction);
+  } else if (direction == comDirection::READING){
+    // reading works even without the value being set (yet)
+    programWrapper(instance, write, read, *value, direction);
+  }
+}
+
+void programMaskWrapper(caen::Digitizer* digitizer, void (caen::Digitizer::*write)(uint32_t), uint32_t (caen::Digitizer::*read)(), std::vector<boost::optional<bool>> &vec, comDirection direction){
+  uint32_t mask = 0;
+  // derive the mask in case we are writing it
+  if (direction == comDirection::WRITING)
+    mask = vec2Mask(vec);
+  programWrapper(digitizer, &caen::Digitizer::setChannelEnableMask, &caen::Digitizer::getChannelEnableMask, mask, direction);
+  // if reading: now store the retrieved mask it in the vector
+  if (direction == comDirection::READING)
+    mask2Vec(mask, vec);
 }
 
 
 void programSettings(caen::Digitizer* digitizer, cadidaq::registerSettings* settings, comDirection direction){
-  programWrapper(digitizer, &caen::Digitizer::setChannelEnableMask, &caen::Digitizer::getChannelEnableMask, vec2Mask(settings->chEnable), direction);
+
+  programWrapper(digitizer, &caen::Digitizer::setSWTriggerMode, &caen::Digitizer::getSWTriggerMode, settings->swTriggerMode, direction);
+
+  if (digitizer->groups() == 1){
+    // no grouped channels
+
+    programMaskWrapper(digitizer, &caen::Digitizer::setChannelEnableMask, &caen::Digitizer::getChannelEnableMask, settings->chEnable, direction);
+  } else {
+    // channels are grouped
+    // TODO: verify that channel vector -> group mask conversion is consistent and the same as channel -> channel mask, else warn about misconfiguration
+  }
 }
 
 //
@@ -136,13 +148,19 @@ void read_ini_file(const char *filename)
       linksettings->verify();
       // TODO: actually establish connection (not using dummy as of now), determine number of available channels
       caen::Digitizer* digitizer = nullptr;
+      MAIN_LOG_INFO << "Establishing connection to digitizer '" << section.first
+                    << "' (linkType=" << *linksettings->linkType
+                    << ", linkNum=" << *linksettings->linkNum
+                    << ", ConetNode=" << *linksettings->conetNode
+                    << ", VMEBaseAddress=" << std::to_string(*linksettings->vmeBaseAddress) << ")";
       try{
-        digitizer = caen::Digitizer::USB(0);
+        digitizer = caen::Digitizer::open(*linksettings->linkType, *linksettings->linkNum, *linksettings->conetNode, *linksettings->vmeBaseAddress);
       }
       catch (caen::Error& e){
         MAIN_LOG_ERROR << "Caught exception when establishing communication with digitizer " << linksettings->getName() << ": " << e.what();
         if (!digitizer){
-          // won't be able to handle this; TODO: more fine-grained error handling
+          // TODO: more fine-grained error handling, more info on log
+          // won't be able to handle this much more gracefully than:
           exit(EXIT_FAILURE);
         }
       }
