@@ -123,7 +123,7 @@ function( enum2str_generate )
     # Extract only the enum
     string( REGEX MATCH "enum[ \t\n]+((struct|class)[ \t\n]+)?${ENUM_NAME}[ \t\n]*(:[^{]+)?{[^}]*}" P1 "${P0}" )
     if( "${P1}" STREQUAL "" )
-      string( REGEX MATCH "enum[ \t\n]+{[^}]*}[ \t\n]+${ENUM_NAME};" P1 "${P0}" )
+      string( REGEX MATCH "enum[ \t\n]+{[^}]*}[ \t\n]*${ENUM_NAME};" P1 "${P0}" )
 
       if( "${P1}" STREQUAL "" )
         message( WARNING "enum '${I}' not found!" )
