@@ -12,13 +12,14 @@
 
 
 // Custom translator for hex (only supports std::string)
+template<typename T>
 struct hexTranslator
 {
-    typedef std::string internal_type;
-    typedef int         external_type;
+  typedef std::string internal_type;
+  typedef T           external_type;
 
     // Converts a (hex)string to int
-    boost::optional<external_type> get_value(const internal_type& str)
+  boost::optional<external_type> get_value(const internal_type& str)
     {
         if (!str.empty())
         {
@@ -61,7 +62,7 @@ struct hexTranslator
     }
 
     // Converts a int to string
-    boost::optional<internal_type> put_value(const external_type& i)
+  boost::optional<internal_type> put_value(const external_type& i)
     {
       return boost::optional<internal_type>(std::to_string(i));
     }
@@ -73,11 +74,17 @@ struct hexTranslator
 namespace boost {
 namespace property_tree {
 
-template<typename Ch, typename Traits, typename Alloc> 
-struct translator_between<std::basic_string< Ch, Traits, Alloc >, int>
-{
-    typedef hexTranslator type;
-};
+  template<typename Ch, typename Traits, typename Alloc>
+  struct translator_between<std::basic_string< Ch, Traits, Alloc >, int>
+  {
+    typedef hexTranslator<int> type;
+  };
+
+  template<typename Ch, typename Traits, typename Alloc>
+  struct translator_between<std::basic_string< Ch, Traits, Alloc >, uint32_t>
+  {
+    typedef hexTranslator<uint32_t> type;
+  };
 
 } // namespace property_tree
 } // namespace boost
