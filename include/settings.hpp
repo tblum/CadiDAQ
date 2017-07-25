@@ -10,6 +10,9 @@
 #include <boost/log/trivial.hpp>
 #include <boost/log/sources/severity_channel_logger.hpp>
 
+// CAEN
+#include <CAENDigitizerType.h>
+
 namespace pt = boost::property_tree;
 
 namespace cadidaq {
@@ -50,7 +53,7 @@ public:
 
   void verify();
 
-  boost::optional<int>      linkType;
+  boost::optional<CAEN_DGTZ_ConnectionType>      linkType;
   boost::optional<int>      linkNum;
   boost::optional<int>      conetNode;
   boost::optional<uint32_t> vmeBaseAddress;
@@ -64,6 +67,9 @@ public:
   ~registerSettings(){;}
 
   void verify();
+
+  // trigger settings
+  boost::optional<CAEN_DGTZ_TriggerMode_t> swTriggerMode;
 
   // CAEN channel settings
   std::vector<boost::optional<bool>>  chEnable;
