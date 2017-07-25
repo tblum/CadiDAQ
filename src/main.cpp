@@ -8,9 +8,6 @@
 #include <iomanip>   // std::hex
 #include <stdexcept> // exceptions
 
-#include <bitset>
-#include <iterator>  // distance
-
 #include <boost/property_tree/ini_parser.hpp>
 #include <boost/program_options.hpp>
 #include <boost/algorithm/string.hpp>
@@ -54,7 +51,7 @@ template <typename T> void programWrapper(caen::Digitizer* instance, void (caen:
       (instance->*write)(value);
     } else {
       // READING
-      T test = (instance->*read)();
+      value = (instance->*read)();
     }
   }
   catch (caen::Error& e){
@@ -70,20 +67,26 @@ template <typename T> void programWrapper(caen::Digitizer* instance, void (caen:
   if (value){
     programWrapper(instance, write, read, *value, direction);
   } else if (direction == comDirection::READING){
-    // reading works even without the value being set (yet)
-    programWrapper(instance, write, read, *value, direction);
+    // reading into dummy variable
+    T k;
+    programWrapper(instance, write, read, k, direction);
+    value = k;
   }
 }
 
-void programMaskWrapper(caen::Digitizer* digitizer, void (caen::Digitizer::*write)(uint32_t), uint32_t (caen::Digitizer::*read)(), std::vector<boost::optional<bool>> &vec, comDirection direction){
+void programMaskWrapper(caen::Digitizer* digitizer, void (caen::Digitizer::*write)(uint32_t), uint32_t (caen::Digitizer::*read)(), std::vector<boost::optional<bool>> &vec, std::string name, comDirection direction){
   uint32_t mask = 0;
   // derive the mask in case we are writing it
   if (direction == comDirection::WRITING)
-    mask = vec2Mask(vec);
+    mask = vec2Mask(vec, digitizer->groups());
+  // verify that channel vector -> group mask conversion is consistent and the same as channel -> channel mask, else warn about misconfiguration
+  if (mask != vec2Mask(vec, 1)){
+    MAIN_LOG_WARN << "Channel mask cannot be exactly mapped to groups of the device for setting '" << name << "'. Using instead group mask of " << mask;
+  }
   programWrapper(digitizer, &caen::Digitizer::setChannelEnableMask, &caen::Digitizer::getChannelEnableMask, mask, direction);
   // if reading: now store the retrieved mask it in the vector
   if (direction == comDirection::READING)
-    mask2Vec(mask, vec);
+    mask2Vec(mask, vec, digitizer->groups());
 }
 
 
@@ -93,11 +96,10 @@ void programSettings(caen::Digitizer* digitizer, cadidaq::registerSettings* sett
 
   if (digitizer->groups() == 1){
     // no grouped channels
-
-    programMaskWrapper(digitizer, &caen::Digitizer::setChannelEnableMask, &caen::Digitizer::getChannelEnableMask, settings->chEnable, direction);
+    programMaskWrapper(digitizer, &caen::Digitizer::setChannelEnableMask, &caen::Digitizer::getChannelEnableMask, settings->chEnable, "chEnable", direction);
   } else {
     // channels are grouped
-    // TODO: verify that channel vector -> group mask conversion is consistent and the same as channel -> channel mask, else warn about misconfiguration
+    programMaskWrapper(digitizer, &caen::Digitizer::setGroupEnableMask, &caen::Digitizer::getGroupEnableMask, settings->chEnable, "chEnable", direction);
   }
 }
 
@@ -115,14 +117,6 @@ void read_ini_file(const char *filename)
     pt::iptree iniPTree; // ptree w/ case-insensitive comparisons
     pt::ini_parser::read_ini(iniStream, iniPTree);
 
-    printf("\n\nFull config:\n");
-    /* Loop over all sections and keys */
-    for (auto& section : iniPTree){
-      std::cout << '[' << section.first << "]" << std::endl;
-      for (auto& key : section.second)
-        std::cout << key.first << "=" << key.second.get_value<std::string>() << std::endl;
-    }
-
     // parse the config file to determine number of digitizers
     int NDigitizer = 0;
     for (auto& section : iniPTree){
@@ -132,23 +126,27 @@ void read_ini_file(const char *filename)
         continue;
       NDigitizer++;
     }
-    std::cout << "Configuration for " << NDigitizer << " digitizer(s) found in config file." << std::endl;
+    MAIN_LOG_INFO << "Configuration for " << NDigitizer << " digitizer(s) found in config file.";
 
     std::vector<cadidaq::connectionSettings*> vecLnkSettings;
     std::vector<cadidaq::registerSettings*> vecRegSettings;
     // get the connection details for each digitizer section
     for (auto& section : iniPTree){
+      // ignoring "daq" settings for main application
       if(boost::iequals(boost::algorithm::to_lower_copy(section.first), std::string("daq")))
         continue;
+      // ignoring "general" section for common digitizer settings (for now)
       if(boost::iequals(boost::algorithm::to_lower_copy(section.first), std::string("general")))
         continue;
-      pt::iptree &node = iniPTree.get_child(section.first);
-      cadidaq::connectionSettings* linksettings = new cadidaq::connectionSettings(section.first);
+      // parse link settings
+      std::string digName = section.first;
+      pt::iptree &node = iniPTree.get_child(digName);
+      cadidaq::connectionSettings* linksettings = new cadidaq::connectionSettings(digName);
       linksettings->parse(&node);
       linksettings->verify();
-      // TODO: actually establish connection (not using dummy as of now), determine number of available channels
+      // establish connection
       caen::Digitizer* digitizer = nullptr;
-      MAIN_LOG_INFO << "Establishing connection to digitizer '" << section.first
+      MAIN_LOG_INFO << "Establishing connection to digitizer '" << digName
                     << "' (linkType=" << *linksettings->linkType
                     << ", linkNum=" << *linksettings->linkNum
                     << ", ConetNode=" << *linksettings->conetNode
@@ -160,19 +158,36 @@ void read_ini_file(const char *filename)
         MAIN_LOG_ERROR << "Caught exception when establishing communication with digitizer " << linksettings->getName() << ": " << e.what();
         if (!digitizer){
           // TODO: more fine-grained error handling, more info on log
+          MAIN_LOG_ERROR << "Please check the physical connection and the connection settings. If using USB link, please make sure that the CAEN USB driver kernel module is installed and loaded, especially after kernel updates (or use DKMS as explained in INSTALL.md).";
           // won't be able to handle this much more gracefully than:
           exit(EXIT_FAILURE);
         }
       }
+      // status printout
+      MAIN_LOG_DEBUG << "Connected to digitzer '" << digName << "'" << std::endl
+                     << "\t Model:\t\t"             << digitizer->modelName() << " (numeric model number: " << digitizer->modelNo() << ")" << std::endl
+                     << "\t NChannels:\t"         << digitizer->channels() << " (in " << digitizer->groups() << " groups)" << std::endl
+                     << "\t ADC bits:\t"          << digitizer->ADCbits() << std::endl
+                     << "\t license:\t"           << digitizer->license() << std::endl
+                     << "\t Form factor:\t"       << digitizer->formFactor() << std::endl
+                     << "\t Family code:\t"       << digitizer->familyCode() << std::endl
+                     << "\t Serial number:\t"     << digitizer->serialNumber() << std::endl
+                     << "\t ROC FW rel.:\t"       << digitizer->ROCfirmwareRel() << ", AMC FW rel.: " << digitizer->AMCfirmwareRel() << std::endl
+                     << "\t PCB rev.:\t"          << digitizer->PCBrevision() << std::endl;
+
+      // register setting parsing
       uint nchannels = digitizer->channels();
       cadidaq::registerSettings* regsettings = new cadidaq::registerSettings(section.first, nchannels);
       regsettings->parse(&node);
       regsettings->verify();
+      // write register configuration to digitizer
       programSettings(digitizer, regsettings, comDirection::WRITING);
       /* Loop over all sub sections and keys that remained after parsing */
       for (auto& key : node){
         MAIN_LOG_WARN << "Unknown setting in section " << section.first << " ignored: \t" << key.first << " = " << key.second.get_value<std::string>();
       }
+      // now read back register configuration from digitizer
+      programSettings(digitizer, regsettings, comDirection::READING);
       vecLnkSettings.push_back(linksettings);
       vecRegSettings.push_back(regsettings);
     }
