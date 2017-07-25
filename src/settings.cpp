@@ -216,7 +216,7 @@ template <class VALUE> void cadidaq::settings::parseSetting(std::string settingN
           node->put(settingName + "[" + std::to_string(index) + "]", **it);
         }
       } else {
-        CFG_LOG_WARN << "Value for '" << settingName << "' not defined for channel #" << std::to_string(index) << " when generating configuration property tree. Setting will be omitted in output.";
+        CFG_LOG_WARN << "Value for '" << settingName << "' not defined for channel #" << std::to_string(index) << " when generating configuration. Setting will be omitted in output.";
       }
     }
   }
@@ -252,9 +252,16 @@ template <class CAEN_ENUM, typename VALUE> void cadidaq::settings::parseSetting(
     // check that setting's value (boost::optional) is actually set
     if (!settingValue) return;
     // find the string corresponding to the setting's enum value in the bimap
-    boost::optional<std::string> strvalue = map.right.at(static_cast<CAEN_ENUM>(*settingValue));
-    // remove the first part originating from CAEN's enum naming convention ("CAEN_DGTZ_")
-    strvalue->erase(0,10);
+    boost::optional<std::string> strvalue;
+    try{
+      strvalue = map.right.at(static_cast<CAEN_ENUM>(*settingValue));
+      // remove the first part originating from CAEN's enum naming convention ("CAEN_DGTZ_")
+      strvalue->erase(0,10);
+    }
+    catch (std::out_of_range & e){
+      CFG_LOG_ERROR << "Could not convert value '" << *settingValue << "' in setting " << settingName << " to a CAEN Digitizer library string. Keeping <int> value instead. Exception: " << e.what();
+      strvalue = std::to_string(*settingValue);
+    }
     // add key to ptree
     parseSetting(settingName, node, strvalue, direction);
   }
