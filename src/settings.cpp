@@ -64,6 +64,11 @@
     return v;
   }
 
+// identifies last element in an iteration 
+template <typename Iter, typename Cont>
+bool is_last(Iter iter, const Cont& cont){
+  return (iter != cont.end()) && (next(iter) == cont.end());
+}
 
 //
 // Class implementation
@@ -142,7 +147,7 @@ template <class VALUE> void cadidaq::settings::parseSetting(std::string settingN
         node->put(settingName, *settingValue);
       }
     } else {
-      CFG_LOG_WARN << "Value for '" << settingName << "' not defined when generating configuration property tree. Setting will be omitted in output.";
+      CFG_LOG_WARN << "Value for '" << settingName << "' not defined when generating configuration. Setting will be omitted in output.";
     }
   }
 }
@@ -225,8 +230,19 @@ template <class CAEN_ENUM, typename VALUE> void cadidaq::settings::parseSetting(
     parseSetting(settingName, node, str, direction);
     if (str){
       settingValue = iFindStringInBimap(map, std::string("CAEN_DGTZ_") + *str); // match the enum nanming convention in CAEN's driver
-
-      CFG_LOG_DEBUG << " value of key " << settingName << " with value '" << *str << "' converted to value " << *settingValue << " (" << map.right.at(static_cast<CAEN_ENUM>(*settingValue)) << ")";
+      if (settingValue){
+        CFG_LOG_DEBUG << "Setting " << settingName << " with value '" << *str << "' converted to value " << *settingValue << " (" << map.right.at(static_cast<CAEN_ENUM>(*settingValue)) << ")";
+      } else {
+        CFG_LOG_ERROR << "Could not parse value of setting " << settingName << ": '" << *str << "' (unknown value) ";
+        // generate a string of known options from the CAEN enum map
+        std::stringstream knownOptions;
+        typedef typename boost::bimap< std::string, CAEN_ENUM >::left_const_iterator const_iterator;
+        for( const_iterator i = map.left.begin(), iend = map.left.end(); i != iend; ++i ){
+          knownOptions << boost::erase_head_copy(i->first, std::string("CAEN_DGTZ_").length());
+          if (!is_last(i, map.left)) knownOptions << ", ";
+        }
+        CFG_LOG_ERROR << "-> did you mean either of " << knownOptions.str() << "?";
+      }
     } else {
       settingValue = boost::none;
     }
@@ -255,12 +271,16 @@ void cadidaq::connectionSettings::verify(){
     if (conetNode && *conetNode != 0){
       CFG_LOG_DEBUG << "When using LinkType=USB, ConetNode needs to be '0'! Fixed.";
     }
-    if (vmeBaseAddress && *vmeBaseAddress != 0){
-      CFG_LOG_DEBUG << "When using LinkType=USB, VMEBaseAddress needs to be '0'! Fixed.";
-    }
     // set the correct values for the chosen linktype
     conetNode = 0;
+  }
+  if (!vmeBaseAddress){
+    CFG_LOG_DEBUG << "VMEBaseAddress connection option not set, assuming '0'";
     vmeBaseAddress = 0;
+  }
+  if (!linkNum){
+    CFG_LOG_WARN << "LinkNum connection option not set, assuming '0'";
+    linkNum = 0;
   }
   CFG_LOG_DEBUG << "Done with verifying connection settings.";
 }
@@ -319,14 +339,13 @@ void cadidaq::registerSettings::processPTree(pt::iptree *node, parseDirection di
   // this routine implements the calls to ParseSetting for individual settings read from config or stored internally
 
   cadidaq::CaenEnum2str converter;
-
   parseSetting("EnableChannel", node, chEnable, direction);
+  parseSetting("SWTriggerMode", node, swTriggerMode, converter.bm_CAEN_DGTZ_TriggerMode_t, direction);
   CFG_LOG_DEBUG << "Done with processing register settings ptree";
 
 }
 
 void cadidaq::registerSettings::verify(){
-  // this routine implements the calls to ParseSetting for individual settings read from config or stored internally
-
+  // TODO: implement "light" checks on e.g. critical options that are valid for all supported digitizer types/families
   CFG_LOG_DEBUG << "Done with verifying register settings.";
 }
