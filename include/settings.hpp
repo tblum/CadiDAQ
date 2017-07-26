@@ -16,16 +16,28 @@
 namespace pt = boost::property_tree;
 
 namespace cadidaq {
-  class settings;
-  class digitizerSettings;
+  class settingsBase;
   class connectionSettings;
   class registerSettings;
 }
 
-class cadidaq::settings {
+/// Define convenience type aliases
+template<class T>
+using Option = std::pair< T, std::string >;
+
+template<class T>
+using Vec = std::vector< boost::optional<T> >;
+
+template<class T>
+using optionVector = std::pair< Vec<T>, std::string >;
+
+/** /class settingsBase
+   Base class to hold settings values and provide methods to parse (and output again) boost's property trees for values and verify them for consistency.
+ */
+class cadidaq::settingsBase {
 public:
-  settings(std::string name);
-  ~settings(){;}
+  settingsBase(std::string name);
+  ~settingsBase(){;}
   void parse(pt::iptree *node);
   pt::iptree* createPTree();
   void fillPTree(pt::iptree *node);
@@ -46,9 +58,12 @@ private:
 };
 
 
-class cadidaq::connectionSettings : public settings {
+/** /class connectionSettings
+    Class to hold settings specifically needed for establishing a link to a digitizer
+*/
+class cadidaq::connectionSettings : public settingsBase {
 public:
-  connectionSettings(std::string name) : cadidaq::settings(name) {}
+  connectionSettings(std::string name) : cadidaq::settingsBase(name) {}
   ~connectionSettings(){;}
 
   void verify();
@@ -61,7 +76,10 @@ private:
   virtual void processPTree(pt::iptree *node, parseDirection direction);
 };
 
-class cadidaq::registerSettings : public settings {
+/** /class registerSettings
+    Class to hold all configuration settings that can be written to the digitizer device after the connection is established.
+*/
+class cadidaq::registerSettings : public settingsBase {
 public:
   registerSettings(std::string name, uint nchannels);
   ~registerSettings(){;}

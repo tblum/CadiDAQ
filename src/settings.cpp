@@ -74,13 +74,13 @@ bool is_last(Iter iter, const Cont& cont){
 // Class implementation
 //
 
-cadidaq::settings::settings(std::string name) : name(name)
+cadidaq::settingsBase::settingsBase(std::string name) : name(name)
 {
   // Register a constant attribute that identifies our digitizer in the logs
   lg.add_attribute("Digitizer", boost::log::attributes::constant<std::string>(name));
 }
 
-void cadidaq::settings::print(){
+void cadidaq::settingsBase::print(){
   // convert all settings to a PTree
   pt::iptree *node = createPTree();
   std::cout << " Config for '" << name << "'" << std::endl;
@@ -91,21 +91,21 @@ void cadidaq::settings::print(){
   delete node;
 };
 
-void cadidaq::settings::parse(pt::iptree *node){
+void cadidaq::settingsBase::parse(pt::iptree *node){
   processPTree(node, parseDirection::READING);
 }
 
-pt::iptree* cadidaq::settings::createPTree(){
+pt::iptree* cadidaq::settingsBase::createPTree(){
   pt::iptree *node = new pt::iptree();
   processPTree(node, parseDirection::WRITING);
   return node;
 }
 
-void cadidaq::settings::fillPTree(pt::iptree *node){
+void cadidaq::settingsBase::fillPTree(pt::iptree *node){
   processPTree(node, parseDirection::WRITING);
 }
 
-template <class CAEN_ENUM> boost::optional<CAEN_ENUM> cadidaq::settings::iFindStringInBimap(boost::bimap< std::string, CAEN_ENUM > map, std::string str){
+template <class CAEN_ENUM> boost::optional<CAEN_ENUM> cadidaq::settingsBase::iFindStringInBimap(boost::bimap< std::string, CAEN_ENUM > map, std::string str){
   typedef typename boost::bimap< std::string, CAEN_ENUM >::left_const_iterator const_iterator;
   for( const_iterator i = map.left.begin(), iend = map.left.end(); i != iend; ++i ){
       if(boost::iequals(boost::algorithm::to_lower_copy(i->first), str))
@@ -115,7 +115,7 @@ template <class CAEN_ENUM> boost::optional<CAEN_ENUM> cadidaq::settings::iFindSt
 }
 
 
-template <class VALUE> void cadidaq::settings::parseSetting(std::string settingName, pt::iptree *node, boost::optional<VALUE>& settingValue, parseDirection direction, defaultBase base){
+template <class VALUE> void cadidaq::settingsBase::parseSetting(std::string settingName, pt::iptree *node, boost::optional<VALUE>& settingValue, parseDirection direction, defaultBase base){
   if (direction == parseDirection::READING){
     // get the setting's value from the ptree
     try{
@@ -153,7 +153,7 @@ template <class VALUE> void cadidaq::settings::parseSetting(std::string settingN
 }
 
 
-template <class VALUE> void cadidaq::settings::parseSetting(std::string settingName, pt::iptree *node, std::vector<boost::optional<VALUE>>& settingValue, parseDirection direction, defaultBase base){
+template <class VALUE> void cadidaq::settingsBase::parseSetting(std::string settingName, pt::iptree *node, std::vector<boost::optional<VALUE>>& settingValue, parseDirection direction, defaultBase base){
   if (direction == parseDirection::READING){
     // get the setting's value from the ptree by looping over all entries of "settingName[RANGE]"
     // important: to keep the iteration stable even when erasing parsed entries, the iterator increment is handled below
@@ -223,7 +223,7 @@ template <class VALUE> void cadidaq::settings::parseSetting(std::string settingN
 }
 
 
-template <class CAEN_ENUM, typename VALUE> void cadidaq::settings::parseSetting(std::string settingName, pt::iptree *node, boost::optional<VALUE>& settingValue, boost::bimap< std::string, CAEN_ENUM > map, parseDirection direction){
+template <class CAEN_ENUM, typename VALUE> void cadidaq::settingsBase::parseSetting(std::string settingName, pt::iptree *node, boost::optional<VALUE>& settingValue, boost::bimap< std::string, CAEN_ENUM > map, parseDirection direction){
   if (direction == parseDirection::READING){
     boost::optional<std::string> str;
     // get the setting's value from the ptree and append
@@ -306,8 +306,9 @@ void cadidaq::connectionSettings::processPTree(pt::iptree *node, parseDirection 
   }
 
 
-cadidaq::registerSettings::registerSettings(std::string name, uint nchannels) : cadidaq::settings(name) {
-    // CAEN digitizer channel settings
+cadidaq::registerSettings::registerSettings(std::string name, uint nchannels) : cadidaq::settingsBase(name) {
+
+   // CAEN digitizer channel settings
     chEnable.resize(nchannels);
     chPosPolarity.resize(nchannels);
     chNegPolarity.resize(nchannels);
