@@ -94,13 +94,26 @@ void programMaskWrapper(caen::Digitizer* digitizer, void (caen::Digitizer::*writ
     mask2Vec(mask, vec.first, digitizer->groups());
 }
 
-/** Implements model/FW-specific settings verification and the calls to read/write the settings from/to the digitizer.
+/** Implements model/FW-specific settings verification and the calls mapping read/write methods from/to the digitizer and the corresponding the settings.
 
  */
 void programSettings(caen::Digitizer* digitizer, cadidaq::registerSettings* settings, comDirection direction){
 
-  programWrapper(digitizer, &caen::Digitizer::setSWTriggerMode, &caen::Digitizer::getSWTriggerMode, settings->swTriggerMode.first, direction);
+  /* data readout */
+  if (!digitizer->hasDppFw()){
+    // maxNumEventsBLT only for non-DPP FW, DPP uses SetDPPEventAggregation
+    programWrapper(digitizer, &caen::Digitizer::setMaxNumEventsBLT, &caen::Digitizer::getMaxNumEventsBLT, settings->maxNumEventsBLT.first, direction);
+  }
 
+  /* trigger */
+  programWrapper(digitizer, &caen::Digitizer::setSWTriggerMode, &caen::Digitizer::getSWTriggerMode, settings->swTriggerMode.first, direction);
+  programWrapper(digitizer, &caen::Digitizer::setIOlevel, &caen::Digitizer::getIOlevel, settings->ioLevel.first, direction);
+
+  /* acquisition */
+  // setRecordLength requires subsequent call to SetPostTriggerSize
+  programWrapper(digitizer, &caen::Digitizer::setRecordLength, &caen::Digitizer::getRecordLength, settings->recordLength.first, direction);
+  programWrapper(digitizer, &caen::Digitizer::setPostTriggerSize, &caen::Digitizer::getPostTriggerSize, settings->postTriggerSize.first, direction);
+  // channel enable
   if (digitizer->groups() == 1){
     // no grouped channels
     programMaskWrapper(digitizer, &caen::Digitizer::setChannelEnableMask, &caen::Digitizer::getChannelEnableMask, settings->chEnable, direction);
@@ -157,7 +170,7 @@ void read_ini_file(const char *filename)
                     << "' (linkType=" << *linksettings->linkType
                     << ", linkNum=" << *linksettings->linkNum
                     << ", ConetNode=" << *linksettings->conetNode
-                    << ", VMEBaseAddress=" << std::to_string(*linksettings->vmeBaseAddress) << ")";
+                    << ", VMEBaseAddress=" << std::hex << std::showbase << *linksettings->vmeBaseAddress << ")";
       try{
         digitizer = caen::Digitizer::open(*linksettings->linkType, *linksettings->linkNum, *linksettings->conetNode, *linksettings->vmeBaseAddress);
       }
@@ -179,7 +192,8 @@ void read_ini_file(const char *filename)
                      << "\t Form factor:\t"       << digitizer->formFactor() << std::endl
                      << "\t Family code:\t"       << digitizer->familyCode() << std::endl
                      << "\t Serial number:\t"     << digitizer->serialNumber() << std::endl
-                     << "\t ROC FW rel.:\t"       << digitizer->ROCfirmwareRel() << ", AMC FW rel.: " << digitizer->AMCfirmwareRel() << std::endl
+                     << "\t ROC FW rel.:\t"       << digitizer->ROCfirmwareRel() << std::endl
+                     << "\t AMC FW rel.:\t"       << digitizer->AMCfirmwareRel() << ", uses DPP FW: " << (digitizer->hasDppFw() ? "yes" : "no") << std::endl
                      << "\t PCB rev.:\t"          << digitizer->PCBrevision() << std::endl;
 
       // register setting parsing

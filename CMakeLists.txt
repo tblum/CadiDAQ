@@ -33,7 +33,7 @@ enum2str_generate(
    NAMESPACE  "cadidaq"
    FUNC_NAME  "toStr"
    INCLUDES   "CAENDigitizerType.h" # WITHOUT directory
-   ENUMS      "CAEN_DGTZ_ConnectionType" "CAEN_DGTZ_BoardModel_t" "CAEN_DGTZ_TriggerMode_t"
+   ENUMS      "CAEN_DGTZ_ConnectionType" "CAEN_DGTZ_BoardModel_t" "CAEN_DGTZ_TriggerMode_t" "CAEN_DGTZ_IOLevel_t"
    BLACKLIST  ""  # any enums that cause trouble
 #   USE_CONSTEXPR
 #   USE_C_STRINGS
