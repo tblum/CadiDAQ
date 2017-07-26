@@ -56,7 +56,11 @@ template <typename T> void programWrapper(caen::Digitizer* instance, void (caen:
   }
   catch (caen::Error& e){
     // TODO: more fine-grained error handling, more info on log
-    MAIN_LOG_ERROR << "Caught exception when communicating with digitizer " << instance->modelName() << ", serial " << instance->serialNumber() << ": " << e.what();
+    MAIN_LOG_ERROR << "Caught exception when communicating with digitizer " << instance->modelName() << ", serial " << instance->serialNumber() << ":";
+    if (direction == comDirection::WRITING)
+      MAIN_LOG_ERROR << "\t Calling " << e.where() << " with argument '" << std::to_string(value) << "' caused exception: " << e.what();
+    else
+      MAIN_LOG_ERROR << "\t Calling " << e.where() << " caused exception: " << e.what();
   }
 }
 
