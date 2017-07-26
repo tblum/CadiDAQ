@@ -105,7 +105,7 @@ void cadidaq::settingsBase::fillPTree(pt::iptree *node){
   processPTree(node, parseDirection::WRITING);
 }
 
-template <class CAEN_ENUM> boost::optional<CAEN_ENUM> cadidaq::settingsBase::iFindStringInBimap(boost::bimap< std::string, CAEN_ENUM > map, std::string str){
+template <class CAEN_ENUM> boost::optional<CAEN_ENUM> cadidaq::settingsBase::iFindStringInBimap(boost::bimap< std::string, CAEN_ENUM >& map, std::string str){
   typedef typename boost::bimap< std::string, CAEN_ENUM >::left_const_iterator const_iterator;
   for( const_iterator i = map.left.begin(), iend = map.left.end(); i != iend; ++i ){
       if(boost::iequals(boost::algorithm::to_lower_copy(i->first), str))
@@ -223,7 +223,7 @@ template <class VALUE> void cadidaq::settingsBase::parseSetting(std::string sett
 }
 
 
-template <class CAEN_ENUM, typename VALUE> void cadidaq::settingsBase::parseSetting(std::string settingName, pt::iptree *node, boost::optional<VALUE>& settingValue, boost::bimap< std::string, CAEN_ENUM > map, parseDirection direction){
+template <class CAEN_ENUM, typename VALUE> void cadidaq::settingsBase::parseSetting(std::string settingName, pt::iptree *node, boost::optional<VALUE>& settingValue, boost::bimap< std::string, CAEN_ENUM >& map, parseDirection direction){
   if (direction == parseDirection::READING){
     boost::optional<std::string> str;
     // get the setting's value from the ptree and append
@@ -267,6 +267,16 @@ template <class CAEN_ENUM, typename VALUE> void cadidaq::settingsBase::parseSett
   }
 }
 
+template <class VALUE> void cadidaq::settingsBase::parseSetting(option<VALUE>& setting, pt::iptree *node, parseDirection direction, defaultBase base){
+  parseSetting(setting.second, node, setting.first, direction, base);
+}
+template <class VALUE> void cadidaq::settingsBase::parseSetting(optionVector<VALUE>& setting, pt::iptree *node, parseDirection direction, defaultBase base){
+  parseSetting(setting.second, node, setting.first, direction, base);
+}
+template <class CAEN_ENUM, typename VALUE> void cadidaq::settingsBase::parseSetting(option<VALUE>& setting, pt::iptree *node, boost::bimap< std::string, CAEN_ENUM >& map, parseDirection direction){
+  parseSetting(setting.second, node, setting.first, map, direction);
+}
+
 
 void cadidaq::connectionSettings::verify(){
 
@@ -307,9 +317,10 @@ void cadidaq::connectionSettings::processPTree(pt::iptree *node, parseDirection 
 
 
 cadidaq::registerSettings::registerSettings(std::string name, uint nchannels) : cadidaq::settingsBase(name) {
+  swTriggerMode = std::make_pair(boost::none, "SWTriggerMode");
 
    // CAEN digitizer channel settings
-    chEnable.resize(nchannels);
+  chEnable = std::make_pair(Vec<bool>(nchannels), "EnableChannel");
     chPosPolarity.resize(nchannels);
     chNegPolarity.resize(nchannels);
     chDCOffset.resize(nchannels);
@@ -347,13 +358,24 @@ void cadidaq::registerSettings::processPTree(pt::iptree *node, parseDirection di
   // this routine implements the calls to ParseSetting for individual settings read from config or stored internally
 
   cadidaq::CaenEnum2str converter;
-  parseSetting("EnableChannel", node, chEnable, direction);
-  parseSetting("SWTriggerMode", node, swTriggerMode, converter.bm_CAEN_DGTZ_TriggerMode_t, direction);
+  parseSetting(chEnable, node, direction);
+  parseSetting(swTriggerMode, node, converter.bm_CAEN_DGTZ_TriggerMode_t, direction);
   CFG_LOG_DEBUG << "Done with processing register settings ptree";
 
 }
 
 void cadidaq::registerSettings::verify(){
-  // TODO: implement "light" checks on e.g. critical options that are valid for all supported digitizer types/families
+  // TODO: implement "light" checks on e.g. critical options that are valid for all supported digitizer types/families (nothing model-dependent)
+  // check that at least one channel is enabled
+  int nChannelEn = 0;
+  for (auto it = chEnable.first.begin(); it != chEnable.first.end(); ++it) {
+    if (*it && **it) {
+      nChannelEn++;
+    }
+  }
+  if (nChannelEn == 0)
+    CFG_LOG_WARN << "No channel has been set to be enabled using setting '" << chEnable.second << "'!";
+  else
+    CFG_LOG_DEBUG << "Setting '" << chEnable.second << "' enables " << nChannelEn << " channels.";
   CFG_LOG_DEBUG << "Done with verifying register settings.";
 }

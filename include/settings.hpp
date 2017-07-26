@@ -21,16 +21,6 @@ namespace cadidaq {
   class registerSettings;
 }
 
-/// Define convenience type aliases
-template<class T>
-using Option = std::pair< T, std::string >;
-
-template<class T>
-using Vec = std::vector< boost::optional<T> >;
-
-template<class T>
-using optionVector = std::pair< Vec<T>, std::string >;
-
 /** /class settingsBase
    Base class to hold settings values and provide methods to parse (and output again) boost's property trees for values and verify them for consistency.
  */
@@ -44,15 +34,30 @@ public:
   virtual void verify(){};
   void print();
   std::string getName(){return name;}
+
+  /// Define convenience type aliases
+  template<class T>
+  using option = std::pair< boost::optional<T>, std::string >;
+
+  template<class T>
+  using Vec = std::vector< boost::optional<T> >;
+
+  template<class T>
+  using optionVector = std::pair< Vec<T>, std::string >;
+
 protected:
   std::string name;
   boost::log::sources::severity_channel_logger< boost::log::trivial::severity_level, std::string > lg;
   enum class parseDirection {READING, WRITING};
   enum class defaultBase {NONE, HEX};
+  template <class CAEN_ENUM> boost::optional<CAEN_ENUM> iFindStringInBimap(boost::bimap< std::string, CAEN_ENUM >& map, std::string str);
   template <class VALUE> void parseSetting(std::string settingName, pt::iptree *node, boost::optional<VALUE>& settingValue, parseDirection direction, defaultBase = defaultBase::NONE);
   template <class VALUE> void parseSetting(std::string settingName, pt::iptree *node, std::vector<boost::optional<VALUE>>& settingValue, parseDirection direction, defaultBase = defaultBase::NONE);
-  template <class CAEN_ENUM> boost::optional<CAEN_ENUM> iFindStringInBimap(boost::bimap< std::string, CAEN_ENUM > map, std::string str);
-  template <class CAEN_ENUM, typename VALUE> void parseSetting(std::string settingName, pt::iptree *node, boost::optional<VALUE>& settingValue, boost::bimap< std::string, CAEN_ENUM > map, parseDirection direction);
+  template <class CAEN_ENUM, typename VALUE> void parseSetting(std::string settingName, pt::iptree *node, boost::optional<VALUE>& settingValue, boost::bimap< std::string, CAEN_ENUM >& map, parseDirection direction);
+  // overloaded methods using combined settings/setting's name nomenclature
+  template <class VALUE> void parseSetting(option<VALUE>& setting, pt::iptree *node, parseDirection direction, defaultBase = defaultBase::NONE);
+  template <class VALUE> void parseSetting(optionVector<VALUE>& setting, pt::iptree *node, parseDirection direction, defaultBase = defaultBase::NONE);
+  template <class CAEN_ENUM, typename VALUE> void parseSetting(option<VALUE>& setting, pt::iptree *node, boost::bimap< std::string, CAEN_ENUM >& map, parseDirection direction);
 private:
   virtual void processPTree(pt::iptree *node, parseDirection direction){};
 };
@@ -68,6 +73,7 @@ public:
 
   void verify();
 
+  // TODO: change over to 'Option' types
   boost::optional<CAEN_DGTZ_ConnectionType>      linkType;
   boost::optional<int>      linkNum;
   boost::optional<int>      conetNode;
@@ -87,10 +93,10 @@ public:
   void verify();
 
   // trigger settings
-  boost::optional<CAEN_DGTZ_TriggerMode_t> swTriggerMode;
+  option<CAEN_DGTZ_TriggerMode_t> swTriggerMode;
 
   // CAEN channel settings
-  std::vector<boost::optional<bool>>  chEnable;
+  optionVector<bool>              chEnable;
   std::vector<boost::optional<bool>>  chPosPolarity;
   std::vector<boost::optional<bool>>  chNegPolarity;
   std::vector<boost::optional<int>>   chDCOffset;

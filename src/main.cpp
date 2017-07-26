@@ -78,32 +78,35 @@ template <typename T> void programWrapper(caen::Digitizer* instance, void (caen:
   }
 }
 
-void programMaskWrapper(caen::Digitizer* digitizer, void (caen::Digitizer::*write)(uint32_t), uint32_t (caen::Digitizer::*read)(), std::vector<boost::optional<bool>> &vec, std::string name, comDirection direction){
+void programMaskWrapper(caen::Digitizer* digitizer, void (caen::Digitizer::*write)(uint32_t), uint32_t (caen::Digitizer::*read)(), cadidaq::settingsBase::optionVector<bool> &vec, comDirection direction){
   uint32_t mask = 0;
   // derive the mask in case we are writing it
-  if (direction == comDirection::WRITING)
-    mask = vec2Mask(vec, digitizer->groups());
-  // verify that channel vector -> group mask conversion is consistent and the same as channel -> channel mask, else warn about misconfiguration
-  if (mask != vec2Mask(vec, 1)){
-    MAIN_LOG_WARN << "Channel mask cannot be exactly mapped to groups of the device for setting '" << name << "'. Using instead group mask of " << mask;
+  if (direction == comDirection::WRITING){
+    mask = vec2Mask(vec.first, digitizer->groups());
+    // verify that channel vector -> group mask conversion is consistent and the same as channel -> channel mask, else warn about misconfiguration
+    if (mask != vec2Mask(vec.first, 1)){
+      MAIN_LOG_WARN << "Channel mask cannot be exactly mapped to groups of the device '"<< digitizer->modelName() << "' for setting '" << vec.second << "'. Using instead group mask of " << mask;
+    }
   }
   programWrapper(digitizer, &caen::Digitizer::setChannelEnableMask, &caen::Digitizer::getChannelEnableMask, mask, direction);
   // if reading: now store the retrieved mask it in the vector
   if (direction == comDirection::READING)
-    mask2Vec(mask, vec, digitizer->groups());
+    mask2Vec(mask, vec.first, digitizer->groups());
 }
 
+/** Implements model/FW-specific settings verification and the calls to read/write the settings from/to the digitizer.
 
+ */
 void programSettings(caen::Digitizer* digitizer, cadidaq::registerSettings* settings, comDirection direction){
 
-  programWrapper(digitizer, &caen::Digitizer::setSWTriggerMode, &caen::Digitizer::getSWTriggerMode, settings->swTriggerMode, direction);
+  programWrapper(digitizer, &caen::Digitizer::setSWTriggerMode, &caen::Digitizer::getSWTriggerMode, settings->swTriggerMode.first, direction);
 
   if (digitizer->groups() == 1){
     // no grouped channels
-    programMaskWrapper(digitizer, &caen::Digitizer::setChannelEnableMask, &caen::Digitizer::getChannelEnableMask, settings->chEnable, "chEnable", direction);
+    programMaskWrapper(digitizer, &caen::Digitizer::setChannelEnableMask, &caen::Digitizer::getChannelEnableMask, settings->chEnable, direction);
   } else {
     // channels are grouped
-    programMaskWrapper(digitizer, &caen::Digitizer::setGroupEnableMask, &caen::Digitizer::getGroupEnableMask, settings->chEnable, "chEnable", direction);
+    programMaskWrapper(digitizer, &caen::Digitizer::setGroupEnableMask, &caen::Digitizer::getGroupEnableMask, settings->chEnable, direction);
   }
 }
 
