@@ -9,20 +9,20 @@
 #include <boost/algorithm/string.hpp>
 #include <boost/algorithm/string/predicate.hpp> // boost::starts_with
 
+
 /** converts a vector of optional<bool> into a uint32 bit mask.
-   defaults to 0 if optional not set */
-inline uint32_t vec2Mask(std::vector<boost::optional<bool>>& vec, uint groupsize = 1){
+    defaults to bit=0 if corresponding optional not set.
+    groups parameter allows to group the bits with any bit in the group being 1 leading to the resulting group's bit being 1
+    blocksize parameter allows to switch bits in blocks of the given number of bits.
+*/
+inline uint32_t vec2Mask(std::vector<boost::optional<bool>>& vec, uint ngroups, uint blocksize = 1){
   std::bitset<32> mask(0);
   for (auto it = vec.begin(); it != vec.end(); ++it) {
     auto index = std::distance(vec.begin(), it);
     // set value if set and 'true' (else it stays 0)
     if (*it && **it) {
-      uint groupidx = index%groupsize;
-      // treat "special case" of all channels belonging to the same group (e.g. no groups, just channels)
-      if (groupsize == 1)
-        groupidx = index;
-      // create a bit pattern for the group the channel belongs to
-      uint32_t shift = (((uint32_t)1 << groupsize) - 1) << groupidx;
+      // create a bit pattern for the channel/group the channel belongs to with size of blocksize
+      uint32_t shift = (((uint32_t)1 << blocksize) - 1) << index/(ngroups*blocksize);
       // set that pattern (applied multiple times if groupsize>1 and remains 'true' if one of the group's members was)
       mask |= shift;
     }
@@ -31,46 +31,79 @@ inline uint32_t vec2Mask(std::vector<boost::optional<bool>>& vec, uint groupsize
 }
 
 /// fills the given bit mask into a vector of boost::optional<bool>
-inline  void mask2Vec(uint32_t mask, std::vector<boost::optional<bool>>& vec, uint groupsize = 1){
+inline  void mask2Vec(uint32_t mask, std::vector<boost::optional<bool>>& vec, uint ngroups = 1){
   std::bitset<32> bits(mask);
-  // TODO: implement treatment of groupsizes > 1
   for (auto it = vec.begin(); it != vec.end(); ++it) {
     auto index = std::distance(vec.begin(), it);
-    uint groupidx = index%groupsize;
-    // treat "special case" of all channels belonging to the same group (e.g. no groups, just channels)
-    if (groupsize == 1)
-      groupidx = index;
+    uint group = index/ngroups;
     // set vector entry
-    *it = bits[groupidx];
+    *it = bits[group];
   }
 }
 
-/// counts the number of 'true' values in a vector of boost::optional<bool>
-inline int countTrue(std::vector<boost::optional<bool>>& vec){
+/// counts the number of 'true' values in a vector of boost::optional<bool> (optionally limited to an index range startidx--stopidx)
+inline int countTrue(std::vector<boost::optional<bool>>& vec, size_t startidx = 0, size_t stopidx = std::numeric_limits<std::size_t>::max()){
   int nTrue = 0;
   for (auto it = vec.begin(); it != vec.end(); ++it) {
-    if (*it && **it) {
+    auto index = std::distance(vec.begin(), it);
+    if (index >= startidx && index < stopidx && *it && **it) {
       nTrue++;
     }
   }
   return nTrue;
 }
 
-/// tests if all values in a vector of boost::optional are set to a value
+/// counts the number of set values in a vector of boost::optional<bool> (optionally limited to an index range startidx--stopidx)
 template <typename T>
-inline bool allValuesSet(std::vector<boost::optional<T>>& vec){
+inline int countSet(std::vector<boost::optional<T>>& vec, size_t startidx = 0, size_t stopidx = std::numeric_limits<std::size_t>::max()){
+  int nSet = 0;
   for (auto it = vec.begin(); it != vec.end(); ++it) {
-    if (!*it)
+    auto index = std::distance(vec.begin(), it);
+    if (index >= startidx && index < stopidx && *it) {
+      nSet++;
+    }
+  }
+  return nSet;
+}
+
+/// tests if all values in a vector of boost::optional are set to some identical value _or_ all are undefined (optionally limited to an index range startidx--stopidx)
+template <typename T>
+inline bool allValuesSame(std::vector<boost::optional<T>>& vec, size_t startidx = 0, size_t stopidx = std::numeric_limits<std::size_t>::max()){
+  boost::optional<T> value;
+  // find first defined value in the idx range
+  for (auto it = vec.begin(); it != vec.end(); ++it) {
+    auto index = std::distance(vec.begin(), it);
+    if (index >= startidx && index < stopidx && (*it)){
+      value = **it;
+      break;
+    }
+  }
+  // now compare against all values
+  for (auto it = vec.begin(); it != vec.end(); ++it) {
+    auto index = std::distance(vec.begin(), it);
+    if (index >= startidx && index < stopidx && *it && (*it != value))
       return false;
   }
   return true;
 }
 
-/// tests if all values in a vector of boost::optional are unset/undefined
+/// tests if all values in a vector of boost::optional are set to any defined value (optionally limited to an index range startidx--stopidx)
 template <typename T>
-inline bool noValuesSet(std::vector<boost::optional<T>>& vec){
+inline bool allValuesSet(std::vector<boost::optional<T>>& vec, size_t startidx = 0, size_t stopidx = std::numeric_limits<std::size_t>::max()){
   for (auto it = vec.begin(); it != vec.end(); ++it) {
-    if (*it)
+    auto index = std::distance(vec.begin(), it);
+    if (!*it && index >= startidx && index < stopidx)
+      return false;
+  }
+  return true;
+}
+
+/// tests if all values in a vector of boost::optional are unset/undefined (optionally limited to an index range startidx--stopidx)
+template <typename T>
+inline bool noValuesSet(std::vector<boost::optional<T>>& vec, size_t startidx = 0, size_t stopidx = std::numeric_limits<std::size_t>::max()){
+  for (auto it = vec.begin(); it != vec.end(); ++it) {
+    auto index = std::distance(vec.begin(), it);
+    if (*it && index >= startidx && index < stopidx)
       return false;
   }
   return true;
