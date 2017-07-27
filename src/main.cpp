@@ -64,6 +64,26 @@ template <typename T> void programWrapper(caen::Digitizer* instance, void (caen:
   }
 }
 
+template <typename T, typename C> void programWrapper(caen::Digitizer* instance, void (caen::Digitizer::*write)(C, T), T (caen::Digitizer::*read)(C), C channel, T &value, comDirection direction){
+  try{
+    if (direction == comDirection::WRITING){
+      // WRITING
+      (instance->*write)(channel, value);
+    } else {
+      // READING
+      value = (instance->*read)(channel);
+    }
+  }
+  catch (caen::Error& e){
+    // TODO: more fine-grained error handling, more info on log
+    MAIN_LOG_ERROR << "Caught exception when communicating with digitizer " << instance->modelName() << ", serial " << instance->serialNumber() << ":";
+    if (direction == comDirection::WRITING)
+      MAIN_LOG_ERROR << "\t Calling " << e.where() << " for channel " << channel << " with argument '" << std::to_string(value) << "' caused exception: " << e.what();
+    else
+      MAIN_LOG_ERROR << "\t Calling " << e.where() << " for channel " << channel << " caused exception: " << e.what();
+  }
+}
+
 template <typename T> void programWrapper(caen::Digitizer* instance, void (caen::Digitizer::*write)(T), T (caen::Digitizer::*read)(), boost::optional<T> &value, comDirection direction){
   // simple additional check to program only if:
   // - optional value is set
@@ -82,17 +102,60 @@ void programMaskWrapper(caen::Digitizer* digitizer, void (caen::Digitizer::*writ
   uint32_t mask = 0;
   // derive the mask in case we are writing it
   if (direction == comDirection::WRITING){
+    // check if the setting has been configured at all
+    if (countSet(vec.first) == 0)
+      return; // keep the default
     mask = vec2Mask(vec.first, digitizer->groups());
     // verify that channel vector -> group mask conversion is consistent and the same as channel -> channel mask, else warn about misconfiguration
-    if (mask != vec2Mask(vec.first, 1)){
+    if (vec2Mask(vec.first, 1, digitizer->channelsPerGroup()) != vec2Mask(vec.first, 1, 1)){
       MAIN_LOG_WARN << "Channel mask cannot be exactly mapped to groups of the device '"<< digitizer->modelName() << "' for setting '" << vec.second << "'. Using instead group mask of " << mask;
     }
   }
-  programWrapper(digitizer, &caen::Digitizer::setChannelEnableMask, &caen::Digitizer::getChannelEnableMask, mask, direction);
+  programWrapper(digitizer, write, read, mask, direction);
   // if reading: now store the retrieved mask it in the vector
   if (direction == comDirection::READING)
     mask2Vec(mask, vec.first, digitizer->groups());
 }
+
+
+template <typename T, typename C>
+void programLoopWrapper(caen::Digitizer* digitizer, void (caen::Digitizer::*write)(C, T), T (caen::Digitizer::*read)(C), cadidaq::settingsBase::optionVector<T> &vec, comDirection direction){
+  // verify that the vector can be put into group structure of the device (if channels are grouped)
+  if (digitizer->groups()>1){
+    for (int i = 0; i<digitizer->groups(); i++){
+      if (!allValuesSame(vec.first,i*digitizer->channelsPerGroup(), (i+1)*digitizer->channelsPerGroup()))
+        MAIN_LOG_WARN << "The channels in the range " << i*digitizer->channelsPerGroup() << " and " << (i+1)*digitizer->channelsPerGroup() << " for '" << vec.second << "' are set to different values -> cannot consistently convert to groups supported by the device!";
+    }
+  }
+  // loop over vector's entries and READ/WRITE values from/to digitzer
+  for (auto it = vec.first.begin(); it != vec.first.end(); ++it) {
+    auto channel = std::distance(vec.first.begin(), it);
+    T value;
+    if (direction == comDirection::WRITING){
+      if (*it)
+        value = **it;
+      else
+        continue; // skip and leave default
+    }
+    // map channel number to group index (or set to one if NGroups==1)
+    C group = channel/digitizer->groups();
+    if (direction == comDirection::READING && channel%digitizer->groups() != 0)
+      continue; // only read once per group
+
+    // perform the call to the digitizer
+    programWrapper(digitizer, write, read, group, value, direction);
+    if (direction == comDirection::READING){
+      *it = value;
+      if (digitizer->groups() > 1){
+        // set the other values in the group
+        for (int i = group*digitizer->channelsPerGroup(); i<(group+1)*digitizer->channelsPerGroup(); i++){
+          vec.first.at(i) = value;
+        }
+      }
+    }
+  }
+}
+
 
 /** Implements model/FW-specific settings verification and the calls mapping read/write methods from/to the digitizer and the corresponding the settings.
 
@@ -107,19 +170,23 @@ void programSettings(caen::Digitizer* digitizer, cadidaq::registerSettings* sett
 
   /* trigger */
   programWrapper(digitizer, &caen::Digitizer::setSWTriggerMode, &caen::Digitizer::getSWTriggerMode, settings->swTriggerMode.first, direction);
+  programWrapper(digitizer, &caen::Digitizer::setExternalTriggerMode, &caen::Digitizer::getExternalTriggerMode, settings->externalTriggerMode.first, direction);
   programWrapper(digitizer, &caen::Digitizer::setIOlevel, &caen::Digitizer::getIOlevel, settings->ioLevel.first, direction);
 
   /* acquisition */
   // setRecordLength requires subsequent call to SetPostTriggerSize
+  programWrapper(digitizer, &caen::Digitizer::setAcquisitionMode, &caen::Digitizer::getAcquisitionMode, settings->acquisitionMode.first, direction);
   programWrapper(digitizer, &caen::Digitizer::setRecordLength, &caen::Digitizer::getRecordLength, settings->recordLength.first, direction);
   programWrapper(digitizer, &caen::Digitizer::setPostTriggerSize, &caen::Digitizer::getPostTriggerSize, settings->postTriggerSize.first, direction);
-  // channel enable
   if (digitizer->groups() == 1){
     // no grouped channels
     programMaskWrapper(digitizer, &caen::Digitizer::setChannelEnableMask, &caen::Digitizer::getChannelEnableMask, settings->chEnable, direction);
+    programLoopWrapper(digitizer, &caen::Digitizer::setChannelDCOffset, &caen::Digitizer::getChannelDCOffset, settings->chDCOffset, direction);
   } else {
     // channels are grouped
     programMaskWrapper(digitizer, &caen::Digitizer::setGroupEnableMask, &caen::Digitizer::getGroupEnableMask, settings->chEnable, direction);
+    programLoopWrapper(digitizer, &caen::Digitizer::setGroupDCOffset, &caen::Digitizer::getGroupDCOffset, settings->chDCOffset, direction);
+
   }
 }
 
