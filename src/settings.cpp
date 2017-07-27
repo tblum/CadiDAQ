@@ -307,15 +307,15 @@ cadidaq::registerSettings::registerSettings(std::string name, uint nchannels) : 
 
   // trigger settings
   swTriggerMode       = std::make_pair(boost::none, "SWTriggerMode");
+  externalTriggerMode = std::make_pair(boost::none, "ExternalTriggerMode");
   ioLevel             = std::make_pair(boost::none, "IOLevel");
 
   // acquisition settings
+  acquisitionMode     = std::make_pair(boost::none, "AcquisitionMode");
   recordLength        = std::make_pair(boost::none, "RecordLength");
   postTriggerSize     = std::make_pair(boost::none, "PostTriggerSize");
-
-   // CAEN digitizer channel settings
-  chEnable = std::make_pair(Vec<bool>(nchannels), "EnableChannel");
-
+  chEnable            = std::make_pair(Vec<bool>(nchannels), "EnableChannel");
+  chDCOffset          = std::make_pair(Vec<uint32_t>(nchannels), "ChannelDCOffset");
 
 }
 
@@ -330,15 +330,20 @@ void cadidaq::registerSettings::processPTree(pt::iptree *node, parseDirection di
 
   // trigger
   parseSetting(swTriggerMode, node, converter.bm_CAEN_DGTZ_TriggerMode_t, direction);
+  parseSetting(externalTriggerMode, node, converter.bm_CAEN_DGTZ_TriggerMode_t, direction);
   parseSetting(ioLevel, node, converter.bm_CAEN_DGTZ_IOLevel_t, direction);
 
   // acquisition
-  parseSetting(chEnable, node, direction);
   parseSetting(recordLength, node, direction);
   parseSetting(postTriggerSize, node, direction);
+  parseSetting(acquisitionMode, node, converter.bm_CAEN_DGTZ_AcqMode_t, direction);
+  parseSetting(chEnable, node, direction);
+  parseSetting(chDCOffset, node, direction);
+
   CFG_LOG_DEBUG << "Done with processing register settings property tree";
 
 }
+
 
 void cadidaq::registerSettings::verify(){
   // TODO: implement "light" checks on e.g. critical options that are valid for all supported digitizer types/families (nothing model-dependent)
@@ -347,5 +352,6 @@ void cadidaq::registerSettings::verify(){
     CFG_LOG_WARN << "No channel has been set to be enabled using setting '" << chEnable.second << "'!";
   else
     CFG_LOG_DEBUG << "Setting '" << chEnable.second << "' enables " << countTrue(chEnable.first) << " channels.";
+
   CFG_LOG_DEBUG << "Done with verifying register settings.";
 }
