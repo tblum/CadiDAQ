@@ -50,9 +50,6 @@ protected:
   boost::log::sources::severity_channel_logger< boost::log::trivial::severity_level, std::string > lg;
   enum class parseDirection {READING, WRITING};
   enum class parseFormat {DEFAULT, HEX, CAENEnum};
-  template <class CAEN_ENUM> boost::optional<CAEN_ENUM> iFindStringInBimap(boost::bimap< std::string, CAEN_ENUM >& map, std::string str);
-  template <typename VALUE> void convertToEnum(std::string name, std::string str, boost::optional<VALUE>& settingValue);
-  template <typename VALUE> boost::optional<std::string> convertFromEnum(std::string name, boost::optional<VALUE>& settingValue);
   template <class VALUE> void parseSetting(std::string settingName, pt::iptree *node, boost::optional<VALUE>& settingValue, parseDirection direction, parseFormat format = parseFormat::DEFAULT);
   template <typename VALUE> void parseSetting(std::string settingName, pt::iptree *node, std::vector<boost::optional<VALUE>>& settingValue, parseDirection direction, parseFormat format = parseFormat::DEFAULT);
   // overloaded methods using combined settings/setting's name nomenclature
