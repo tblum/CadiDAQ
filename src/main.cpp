@@ -172,6 +172,14 @@ void programSettings(caen::Digitizer* digitizer, cadidaq::registerSettings* sett
   programWrapper(digitizer, &caen::Digitizer::setSWTriggerMode, &caen::Digitizer::getSWTriggerMode, settings->swTriggerMode.first, direction);
   programWrapper(digitizer, &caen::Digitizer::setExternalTriggerMode, &caen::Digitizer::getExternalTriggerMode, settings->externalTriggerMode.first, direction);
   programWrapper(digitizer, &caen::Digitizer::setIOlevel, &caen::Digitizer::getIOlevel, settings->ioLevel.first, direction);
+  if (digitizer->groups() == 1){
+    // no grouped channels
+    programLoopWrapper(digitizer, &caen::Digitizer::setChannelSelfTrigger, &caen::Digitizer::getChannelSelfTrigger, settings->chSelfTrigger, direction);
+  } else {
+    // channels are grouped
+    // TODO: find out whether or not to call this with DPP FW present! Documentation not 100% clear on that.. (use DPPParams.selft = ... instead?)
+    programLoopWrapper(digitizer, &caen::Digitizer::setGroupSelfTrigger, &caen::Digitizer::getGroupSelfTrigger, settings->chSelfTrigger, direction);
+  }
 
   /* acquisition */
   // setRecordLength requires subsequent call to SetPostTriggerSize
@@ -186,7 +194,6 @@ void programSettings(caen::Digitizer* digitizer, cadidaq::registerSettings* sett
     // channels are grouped
     programMaskWrapper(digitizer, &caen::Digitizer::setGroupEnableMask, &caen::Digitizer::getGroupEnableMask, settings->chEnable, direction);
     programLoopWrapper(digitizer, &caen::Digitizer::setGroupDCOffset, &caen::Digitizer::getGroupDCOffset, settings->chDCOffset, direction);
-
   }
 }
 

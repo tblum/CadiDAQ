@@ -290,6 +290,7 @@ void cadidaq::registerSettings::processPTree(pt::iptree *node, parseDirection di
   parseSetting(swTriggerMode, node, direction);
   parseSetting(externalTriggerMode, node, direction);
   parseSetting(ioLevel, node, direction);
+  parseSetting(chSelfTrigger, node, direction);
 
   // acquisition
   parseSetting(recordLength, node, direction);
