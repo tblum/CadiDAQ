@@ -84,10 +84,9 @@ cadidaq::settingsBase::settingsBase(std::string name) : name(name)
 void cadidaq::settingsBase::print(){
   // convert all settings to a PTree
   pt::iptree *node = createPTree();
-  std::cout << " Config for '" << name << "'" << std::endl;
   /* Loop over all sub sections and keys */
   for (auto& key : *node){
-    std::cout << "\t" << key.first << " = " << key.second.get_value<std::string>() << std::endl;
+    CFG_LOG_INFO << "\t" << key.first << " = " << key.second.get_value<std::string>();
   }
   delete node;
 };

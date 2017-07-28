@@ -73,7 +73,8 @@ void init_console_logging(){
 
   // Set up the minimum severity levels for different channels
   min_severity["cfg"] = boost::log::trivial::debug;
-  min_severity["main"] = boost::log::trivial::info;
+  min_severity["main"] = boost::log::trivial::debug;
+  min_severity["dig"] = boost::log::trivial::debug;
 
   auto consoleLog = boost::log::add_console_log(
                   std::clog,
