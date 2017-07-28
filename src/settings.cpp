@@ -98,20 +98,71 @@ template <class CAEN_ENUM> boost::optional<CAEN_ENUM> cadidaq::settingsBase::iFi
   return boost::none;
 }
 
+/// generate a string of known options from the CAEN enum map
+template <typename CAEN_ENUM> std::string getKnownEnums(boost::bimap< std::string, CAEN_ENUM >& map){
+  std::stringstream knownOptions;
+  std::string enumRoot = findEnumRoot(map);
+  typedef typename boost::bimap< std::string, CAEN_ENUM >::left_const_iterator const_iterator;
+  for( const_iterator i = map.left.begin(), iend = map.left.end(); i != iend; ++i ){
+    knownOptions << boost::erase_head_copy(i->first, enumRoot.length());
+    if (!is_last(i, map.left)) knownOptions << ", ";
+  }
+  return knownOptions.str();
+}
 
-template <class VALUE> void cadidaq::settingsBase::parseSetting(std::string settingName, pt::iptree *node, boost::optional<VALUE>& settingValue, parseDirection direction, defaultBase base){
+template <typename VALUE> void cadidaq::settingsBase::convertToEnum(std::string name, std::string str, boost::optional<VALUE>& settingValue){
+  // get a converter for this CAEN enum type
+  auto& map = enumConverter.getBimap(settingValue);
+  settingValue = iFindStringInBimap(map, findEnumRoot(map) + str); // match the enum nanming convention in CAEN's driver
+  if (settingValue){
+    CFG_LOG_DEBUG << "Setting " << name << " with value '" << str << "' converted to value " << *settingValue << " (" << map.right.at(*settingValue) << ")";
+  } else {
+    CFG_LOG_ERROR << "Could not parse value of setting " << name << ": '" << str << "' (unknown value) ";
+    CFG_LOG_ERROR << "-> did you mean either of " << getKnownEnums(map) << "?";
+  }
+}
+
+template <typename VALUE> boost::optional<std::string> cadidaq::settingsBase::convertFromEnum(std::string name, boost::optional<VALUE>& settingValue){
+  auto& map = enumConverter.getBimap(settingValue);
+  // find the string corresponding to the setting's enum value in the bimap
+  boost::optional<std::string> strvalue;
+  try{
+    strvalue = map.right.at(*settingValue);
+    // remove the first part originating from CAEN's enum naming convention ("CAEN_DGTZ_".....)
+    strvalue->erase(0,findEnumRoot(map).length());
+  }
+  catch (std::out_of_range & e){
+    CFG_LOG_ERROR << "Could not convert value '" << *settingValue << "' in setting " << name << " to a CAEN Digitizer library string. Keeping <int> value instead. Exception: " << e.what();
+    strvalue = std::to_string(*settingValue);
+  }
+  return strvalue;
+}
+
+
+template <class VALUE> void cadidaq::settingsBase::parseSetting(std::string settingName, pt::iptree *node, boost::optional<VALUE>& settingValue, parseDirection direction, parseFormat format){
   if (direction == parseDirection::READING){
-    // get the setting's value from the ptree
-    try{
-      settingValue = node->get<VALUE>(settingName);
-    }
-    catch (const pt::ptree_bad_data& e){
-      CFG_LOG_ERROR << "Parsing '" << settingName << "' yielded Bad_Data exception (" << e.what() << ") for value: " << node->get<std::string>(settingName);
-      return;
-    }
-    catch (const pt::ptree_bad_path& e){
-      CFG_LOG_DEBUG << "Could not find key '" << settingName << "'";
-      return;
+    // format-dependent parsing:
+    if (format == parseFormat::CAENEnum){
+      // special treatment for CAEN enums as ptree is not familiar with the type (and it would conflict ):
+      // parse as string first, then convert
+      boost::optional<std::string> str;
+      parseSetting(settingName, node, str, direction);
+      if (str){
+        convertToEnum(settingName, *str, settingValue, map);
+      }
+    } else {
+      // get the setting's value from the ptree the default way
+      try{
+        settingValue = node->get<VALUE>(settingName);
+      }
+      catch (const pt::ptree_bad_data& e){
+        CFG_LOG_ERROR << "Parsing '" << settingName << "' yielded Bad_Data exception (" << e.what() << ") for value: " << node->get<std::string>(settingName);
+        return;
+      }
+      catch (const pt::ptree_bad_path& e){
+        CFG_LOG_DEBUG << "Could not find key '" << settingName << "'";
+        return;
+      }
     }
     if (settingValue) {
       CFG_LOG_DEBUG << "found key " << settingName << " with value '" << *settingValue << "'";
@@ -123,7 +174,7 @@ template <class VALUE> void cadidaq::settingsBase::parseSetting(std::string sett
     // direction: WRITING
     // add key to ptree if the setting's value has been set
     if (settingValue) {
-      if (base == defaultBase::HEX){
+      if (base == parseFormat::HEX){
         std::stringstream ss;
         ss << std::hex << std::showbase << settingValue; // might need e.g. std::setfill ('0') and std::setw(sizeof(your_type)*2)
         node->put(settingName, ss.str());
@@ -137,10 +188,12 @@ template <class VALUE> void cadidaq::settingsBase::parseSetting(std::string sett
 }
 
 
-template <class VALUE> void cadidaq::settingsBase::parseSetting(std::string settingName, pt::iptree *node, std::vector<boost::optional<VALUE>>& settingValue, parseDirection direction, defaultBase base){
+template <typename VALUE> void cadidaq::settingsBase::parseSetting(std::string settingName, pt::iptree *node, std::vector<boost::optional<VALUE>>& settingValue, parseDirection direction, parseFormat format){
   if (direction == parseDirection::READING){
     // get the setting's value from the ptree by looping over all entries of "settingName[RANGE]"
     // important: to keep the iteration stable even when erasing parsed entries, the iterator increment is handled below
+
+    // TODO: move this over to use a call to parseSetting to retrieve the actual value after the key string deconstruction
     for (auto key = node->begin(); key != node->end();){
       if (boost::istarts_with(key->first, settingName)){
         CFG_LOG_DEBUG << "Found a matching key: '" << key->first << "' with value '" << key->second.get_value<std::string>() << "'";
@@ -164,17 +217,21 @@ template <class VALUE> void cadidaq::settingsBase::parseSetting(std::string sett
 
         // loop over parsed range and set the values in the settings vector
         for(auto x:v){
-          try{
-            settingValue.at(x) = key->second.get_value<VALUE>();
-          }
-          catch (const std::out_of_range& e) {
-            CFG_LOG_ERROR << "Channel number '" << std::to_string(x) << "' in setting '" << settingName << "' is out of range!";
-            continue;
-          }
-          catch (const pt::ptree_bad_data& e) {
-            CFG_LOG_ERROR << "Error parsing setting '" << settingName << "': " << e.what() << ". Offending value: " << key->second.get_value<std::string>();
-            break;
-          }
+            try{
+              settingValue.at(x) = key->second.get_value<VALUE>();
+            }
+            catch (const std::out_of_range& e) {
+              CFG_LOG_ERROR << "Channel number '" << std::to_string(x) << "' in setting '" << settingName << "' is out of range!";
+              continue;
+            }
+            catch (const pt::ptree_bad_data& e) {
+              CFG_LOG_ERROR << "Error parsing setting '" << settingName << "': " << e.what() << ". Offending value: " << key->second.get_value<std::string>();
+              break;
+            }
+          // } else {
+          //   // retrieve the value by converting via the CAEN enum bimap
+          //   convertToEnum(settingName, key->second.get_value<std::string>(), settingValue, map);
+          // }
         }
         // erase the now-parsed key from the ptree node
         // important: to keep the iteration stable over erases we have to use the iterator returned from the erase operation!
@@ -192,13 +249,17 @@ template <class VALUE> void cadidaq::settingsBase::parseSetting(std::string sett
     for (auto it = settingValue.begin(); it != settingValue.end(); ++it) {
       auto index = std::distance(settingValue.begin(), it);
       if (*it) {
-        if (base == defaultBase::HEX){
-          std::stringstream ss;
-          ss << std::hex << std::showbase << **it; // might need e.g. std::setfill ('0') and std::setw(sizeof(your_type)*2)
-          node->put(settingName + "[" + std::to_string(index) + "]", ss.str());
-        } else {
-          node->put(settingName + "[" + std::to_string(index) + "]", **it);
-        }
+          if (base == parseFormat::HEX){
+            std::stringstream ss;
+            ss << std::hex << std::showbase << **it; // might need e.g. std::setfill ('0') and std::setw(sizeof(your_type)*2)
+            node->put(settingName + "[" + std::to_string(index) + "]", ss.str());
+          } else {
+            node->put(settingName + "[" + std::to_string(index) + "]", **it);
+          }
+        // } else {
+        //   // if map provided: convert CAEN enum to string
+        //   node->put(settingName + "[" + std::to_string(index) + "]", *convertFromEnum(settingName, settingValue, map));
+        // }
       } else {
         CFG_LOG_WARN << "Value for '" << settingName << "' not defined for channel #" << std::to_string(index) << " when generating configuration. Setting will be omitted in output.";
       }
@@ -207,59 +268,32 @@ template <class VALUE> void cadidaq::settingsBase::parseSetting(std::string sett
 }
 
 
-template <class CAEN_ENUM, typename VALUE> void cadidaq::settingsBase::parseSetting(std::string settingName, pt::iptree *node, boost::optional<VALUE>& settingValue, boost::bimap< std::string, CAEN_ENUM >& map, parseDirection direction){
-  if (direction == parseDirection::READING){
-    boost::optional<std::string> str;
-    // get the setting's value from the ptree and append
-    parseSetting(settingName, node, str, direction);
-    if (str){
-      settingValue = iFindStringInBimap(map, findEnumRoot(map) + *str); // match the enum nanming convention in CAEN's driver
-      if (settingValue){
-        CFG_LOG_DEBUG << "Setting " << settingName << " with value '" << *str << "' converted to value " << *settingValue << " (" << map.right.at(static_cast<CAEN_ENUM>(*settingValue)) << ")";
-      } else {
-        CFG_LOG_ERROR << "Could not parse value of setting " << settingName << ": '" << *str << "' (unknown value) ";
-        // generate a string of known options from the CAEN enum map
-        std::stringstream knownOptions;
-        std::string enumRoot = findEnumRoot(map);
-        typedef typename boost::bimap< std::string, CAEN_ENUM >::left_const_iterator const_iterator;
-        for( const_iterator i = map.left.begin(), iend = map.left.end(); i != iend; ++i ){
-          knownOptions << boost::erase_head_copy(i->first, enumRoot.length());
-          if (!is_last(i, map.left)) knownOptions << ", ";
-        }
-        CFG_LOG_ERROR << "-> did you mean either of " << knownOptions.str() << "?";
-      }
-    } else {
-      settingValue = boost::none;
-    }
-  } else {
-    // direction: WRITING
+// template <typename VALUE> void cadidaq::settingsBase::parseSetting(std::string settingName, pt::iptree *node, boost::optional<VALUE>& settingValue, parseDirection direction){
+//   if (direction == parseDirection::READING){
+//     boost::optional<std::string> str;
+//     // get the setting's value from the ptree and append
+//     parseSetting(settingName, node, str, direction);
+//     if (str){
+//       convertToEnum(settingName, *str, settingValue, map);
+//     } else {
+//       settingValue = boost::none;
+//     }
+//   } else {
+//     // direction: WRITING
 
-    // check that setting's value (boost::optional) is actually set
-    if (!settingValue) return;
-    // find the string corresponding to the setting's enum value in the bimap
-    boost::optional<std::string> strvalue;
-    try{
-      strvalue = map.right.at(static_cast<CAEN_ENUM>(*settingValue));
-      // remove the first part originating from CAEN's enum naming convention ("CAEN_DGTZ_".....)
-      strvalue->erase(0,findEnumRoot(map).length());
-    }
-    catch (std::out_of_range & e){
-      CFG_LOG_ERROR << "Could not convert value '" << *settingValue << "' in setting " << settingName << " to a CAEN Digitizer library string. Keeping <int> value instead. Exception: " << e.what();
-      strvalue = std::to_string(*settingValue);
-    }
-    // add key to ptree
-    parseSetting(settingName, node, strvalue, direction);
-  }
-}
+//     // check that setting's value (boost::optional) is actually set
+//     if (!settingValue) return;
 
-template <class VALUE> void cadidaq::settingsBase::parseSetting(option<VALUE>& setting, pt::iptree *node, parseDirection direction, defaultBase base){
+//     // add key to ptree
+//     parseSetting(settingName, node, convertFromEnum(settingName, settingValue, map), direction);
+//   }
+// }
+
+template <class VALUE> void cadidaq::settingsBase::parseSetting(option<VALUE>& setting, pt::iptree *node, parseDirection direction, parseFormat format){
   parseSetting(setting.second, node, setting.first, direction, base);
 }
-template <class VALUE> void cadidaq::settingsBase::parseSetting(optionVector<VALUE>& setting, pt::iptree *node, parseDirection direction, defaultBase base){
+template <typename VALUE> void cadidaq::settingsBase::parseSetting(optionVector<VALUE>& setting, pt::iptree *node, parseDirection direction, parseFormat format){
   parseSetting(setting.second, node, setting.first, direction, base);
-}
-template <class CAEN_ENUM, typename VALUE> void cadidaq::settingsBase::parseSetting(option<VALUE>& setting, pt::iptree *node, boost::bimap< std::string, CAEN_ENUM >& map, parseDirection direction){
-  parseSetting(setting.second, node, setting.first, map, direction);
 }
 
 
@@ -290,12 +324,10 @@ void cadidaq::connectionSettings::verify(){
 void cadidaq::connectionSettings::processPTree(pt::iptree *node, parseDirection direction){
     // this routine implements the calls to ParseSetting for individual settings read from config or stored internally
 
-    cadidaq::CaenEnum2str converter;
-
-    parseSetting("LinkType", node, linkType, converter.bm_CAEN_DGTZ_ConnectionType, direction);
+    parseSetting("LinkType", node, linkType, direction);
     parseSetting("LinkNum", node, linkNum, direction);
     parseSetting("ConetNode", node, conetNode, direction);
-    parseSetting("VMEBaseAddress", node, vmeBaseAddress, direction, defaultBase::HEX);
+    parseSetting("VMEBaseAddress", node, vmeBaseAddress, direction, parseFormat::HEX);
     CFG_LOG_DEBUG << "Done with processing connection settings ptree";
 
   }
@@ -309,6 +341,7 @@ cadidaq::registerSettings::registerSettings(std::string name, uint nchannels) : 
   swTriggerMode       = std::make_pair(boost::none, "SWTriggerMode");
   externalTriggerMode = std::make_pair(boost::none, "ExternalTriggerMode");
   ioLevel             = std::make_pair(boost::none, "IOLevel");
+  chSelfTrigger       = std::make_pair(Vec<CAEN_DGTZ_TriggerMode_t>(nchannels), "ChannelSelfTrigger");
 
   // acquisition settings
   acquisitionMode     = std::make_pair(boost::none, "AcquisitionMode");
@@ -324,19 +357,18 @@ cadidaq::registerSettings::registerSettings(std::string name, uint nchannels) : 
 void cadidaq::registerSettings::processPTree(pt::iptree *node, parseDirection direction){
   // this routine implements the calls to ParseSetting for individual settings read from config or stored internally
 
-  cadidaq::CaenEnum2str converter;
   // data readout
   parseSetting(maxNumEventsBLT, node, direction);
 
   // trigger
-  parseSetting(swTriggerMode, node, converter.bm_CAEN_DGTZ_TriggerMode_t, direction);
-  parseSetting(externalTriggerMode, node, converter.bm_CAEN_DGTZ_TriggerMode_t, direction);
-  parseSetting(ioLevel, node, converter.bm_CAEN_DGTZ_IOLevel_t, direction);
+  parseSetting(swTriggerMode, node, direction);
+  parseSetting(externalTriggerMode, node, direction);
+  parseSetting(ioLevel, node, direction);
 
   // acquisition
   parseSetting(recordLength, node, direction);
   parseSetting(postTriggerSize, node, direction);
-  parseSetting(acquisitionMode, node, converter.bm_CAEN_DGTZ_AcqMode_t, direction);
+  parseSetting(acquisitionMode, node, direction);
   parseSetting(chEnable, node, direction);
   parseSetting(chDCOffset, node, direction);
 

@@ -213,6 +213,8 @@ function( enum2str_add )
   IF(NOT OPTS_USE_CONSTEXPR )
     file( APPEND "${HPP_FILE}" "${IND}typedef boost::bimap< ${STRING_TYPE}, ${ARGV0} > bm_${ARGV0}_type;\n" )
     file( APPEND "${HPP_FILE}" "${IND}bm_${ARGV0}_type bm_${ARGV0};\n" )
+    file( APPEND "${HPP_FILE}" "${IND}bm_${ARGV0}_type* getBimap(${ARGV0}){return &bm_${ARGV0};}\n" )
+    file( APPEND "${HPP_FILE}" "${IND}bm_${ARGV0}_type* getBimap(boost::optional<${ARGV0}>){return &bm_${ARGV0};}\n\n" )
 
     file( APPEND "${CPP_FILE}" "/*!\n * \\brief bimap of ${STRING_TYPE} and enum ${ARGV0}\n */\n" )
 

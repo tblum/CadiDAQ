@@ -49,15 +49,15 @@ protected:
   std::string name;
   boost::log::sources::severity_channel_logger< boost::log::trivial::severity_level, std::string > lg;
   enum class parseDirection {READING, WRITING};
-  enum class defaultBase {NONE, HEX};
+  enum class parseFormat {DEFAULT, HEX, CAENEnum};
   template <class CAEN_ENUM> boost::optional<CAEN_ENUM> iFindStringInBimap(boost::bimap< std::string, CAEN_ENUM >& map, std::string str);
-  template <class VALUE> void parseSetting(std::string settingName, pt::iptree *node, boost::optional<VALUE>& settingValue, parseDirection direction, defaultBase = defaultBase::NONE);
-  template <class VALUE> void parseSetting(std::string settingName, pt::iptree *node, std::vector<boost::optional<VALUE>>& settingValue, parseDirection direction, defaultBase = defaultBase::NONE);
-  template <class CAEN_ENUM, typename VALUE> void parseSetting(std::string settingName, pt::iptree *node, boost::optional<VALUE>& settingValue, boost::bimap< std::string, CAEN_ENUM >& map, parseDirection direction);
+  template <typename VALUE> void convertToEnum(std::string name, std::string str, boost::optional<VALUE>& settingValue);
+  template <typename VALUE> boost::optional<std::string> convertFromEnum(std::string name, boost::optional<VALUE>& settingValue);
+  template <class VALUE> void parseSetting(std::string settingName, pt::iptree *node, boost::optional<VALUE>& settingValue, parseDirection direction, parseFormat format = parseFormat::DEFAULT);
+  template <typename VALUE> void parseSetting(std::string settingName, pt::iptree *node, std::vector<boost::optional<VALUE>>& settingValue, parseDirection direction, parseFormat = format parseFormat::DEFAULT);
   // overloaded methods using combined settings/setting's name nomenclature
-  template <class VALUE> void parseSetting(option<VALUE>& setting, pt::iptree *node, parseDirection direction, defaultBase = defaultBase::NONE);
-  template <class VALUE> void parseSetting(optionVector<VALUE>& setting, pt::iptree *node, parseDirection direction, defaultBase = defaultBase::NONE);
-  template <class CAEN_ENUM, typename VALUE> void parseSetting(option<VALUE>& setting, pt::iptree *node, boost::bimap< std::string, CAEN_ENUM >& map, parseDirection direction);
+  template <class VALUE> void parseSetting(option<VALUE>& setting, pt::iptree *node, parseDirection direction, parseFormat format = parseFormat::DEFAULT);
+  template <typename VALUE> void parseSetting(optionVector<VALUE>& setting, pt::iptree *node, parseDirection direction, parseFormat format = parseFormat::DEFAULT);
 private:
   virtual void processPTree(pt::iptree *node, parseDirection direction){};
 };
@@ -96,16 +96,17 @@ public:
   option<uint32_t> maxNumEventsBLT;
 
   // trigger settings
-  option<CAEN_DGTZ_TriggerMode_t> swTriggerMode;
-  option<CAEN_DGTZ_TriggerMode_t> externalTriggerMode;
-  option<CAEN_DGTZ_IOLevel_t>     ioLevel;
+  option<CAEN_DGTZ_TriggerMode_t>        swTriggerMode;
+  option<CAEN_DGTZ_TriggerMode_t>        externalTriggerMode;
+  option<CAEN_DGTZ_IOLevel_t>            ioLevel;
+  optionVector<CAEN_DGTZ_TriggerMode_t>  chSelfTrigger;
 
   // acquisition settings
-  option<CAEN_DGTZ_AcqMode_t>     acquisitionMode;
-  option<uint32_t>                recordLength;
-  option<uint32_t>                postTriggerSize;
-  optionVector<bool>              chEnable;
-  optionVector<uint32_t>          chDCOffset;
+  option<CAEN_DGTZ_AcqMode_t>            acquisitionMode;
+  option<uint32_t>                       recordLength;
+  option<uint32_t>                       postTriggerSize;
+  optionVector<bool>                     chEnable;
+  optionVector<uint32_t>                 chDCOffset;
 
 private:
   virtual void processPTree(pt::iptree *node, parseDirection direction);
