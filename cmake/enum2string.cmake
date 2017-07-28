@@ -62,6 +62,7 @@ function( enum2str_generate )
 
   set( HPP_FILE "${OPTS_PATH}/${OPTS_CLASS_NAME}.hpp" )
   set( CPP_FILE "${OPTS_PATH}/${OPTS_CLASS_NAME}.cpp" )
+  set( TRANSL_FILE "${OPTS_PATH}/${OPTS_CLASS_NAME}Translator.hpp" )
 
   enum2str_init()
 
@@ -214,7 +215,15 @@ function( enum2str_add )
     file( APPEND "${HPP_FILE}" "${IND}typedef boost::bimap< ${STRING_TYPE}, ${ARGV0} > bm_${ARGV0}_type;\n" )
     file( APPEND "${HPP_FILE}" "${IND}bm_${ARGV0}_type bm_${ARGV0};\n" )
     file( APPEND "${HPP_FILE}" "${IND}bm_${ARGV0}_type* getBimap(${ARGV0}){return &bm_${ARGV0};}\n" )
-    file( APPEND "${HPP_FILE}" "${IND}bm_${ARGV0}_type* getBimap(boost::optional<${ARGV0}>){return &bm_${ARGV0};}\n\n" )
+
+    file( APPEND "${TRANSL_FILE}" "" )
+
+    file( APPEND "${TRANSL_FILE}" "template<typename Ch, typename Traits, typename Alloc>\n")
+    file( APPEND "${TRANSL_FILE}" "struct translator_between<std::basic_string< Ch, Traits, Alloc >, ${ARGV0}>\n")
+    file( APPEND "${TRANSL_FILE}" "{\n")
+    file( APPEND "${TRANSL_FILE}" "typedef caenEnumTranslator<${ARGV0}> type;\n")
+    file( APPEND "${TRANSL_FILE}" "};\n")
+
 
     file( APPEND "${CPP_FILE}" "/*!\n * \\brief bimap of ${STRING_TYPE} and enum ${ARGV0}\n */\n" )
 
@@ -269,11 +278,30 @@ function( enum2str_init )
     file( APPEND "${CPP_FILE}" "${OPTS_CLASS_NAME}::${OPTS_CLASS_NAME}(){\n" )
 
   endif( NOT OPTS_USE_CONSTEXPR )
+
+  file( WRITE  "${TRANSL_FILE}" "/*!\n" )
+  file( APPEND "${TRANSL_FILE}" "  * \\file ${OPTS_CLASS_NAME}Translator.hpp\n" )
+  file( APPEND "${TRANSL_FILE}" "  * \\warning This is an automatically generated file!\n" )
+  file( APPEND "${TRANSL_FILE}" "  */\n\n" )
+  file( APPEND "${TRANSL_FILE}" "#pragma once\n\n" )
+  file( APPEND "${TRANSL_FILE}" "#include <boost/property_tree/ptree.hpp>\n" )
+  file( APPEND "${TRANSL_FILE}" "#include <caenEnumTranslatorImpl.hpp>\n" )
+  file( APPEND "${TRANSL_FILE}" "#include \"${OPTS_CLASS_NAME}.hpp\"\n\n" )
+
+  file( APPEND "${TRANSL_FILE}" "  /*  Specialize translator_between so that it uses our custom translator for\n")
+  file( APPEND "${TRANSL_FILE}" "    int value types. Specialization must be in boost::property_tree\n")
+  file( APPEND "${TRANSL_FILE}" "    namespace. */\n")
+  file( APPEND "${TRANSL_FILE}" "namespace boost {\n")
+  file( APPEND "${TRANSL_FILE}" "namespace property_tree {\n")
+
+
 endfunction( enum2str_init )
 
 
 function( enum2str_end )
   string( TOUPPER ${OPTS_CLASS_NAME} OPTS_CLASS_NAME_UPPERCASE )
+
+  file( APPEND "${TRANSL_FILE}" "}\n}\n")
 
   file( APPEND "${HPP_FILE}" "};\n\n}\n\n// clang-format on\n" )
   if( NOT OPTS_USE_CONSTEXPR )

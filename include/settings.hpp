@@ -54,7 +54,7 @@ protected:
   template <typename VALUE> void convertToEnum(std::string name, std::string str, boost::optional<VALUE>& settingValue);
   template <typename VALUE> boost::optional<std::string> convertFromEnum(std::string name, boost::optional<VALUE>& settingValue);
   template <class VALUE> void parseSetting(std::string settingName, pt::iptree *node, boost::optional<VALUE>& settingValue, parseDirection direction, parseFormat format = parseFormat::DEFAULT);
-  template <typename VALUE> void parseSetting(std::string settingName, pt::iptree *node, std::vector<boost::optional<VALUE>>& settingValue, parseDirection direction, parseFormat = format parseFormat::DEFAULT);
+  template <typename VALUE> void parseSetting(std::string settingName, pt::iptree *node, std::vector<boost::optional<VALUE>>& settingValue, parseDirection direction, parseFormat format = parseFormat::DEFAULT);
   // overloaded methods using combined settings/setting's name nomenclature
   template <class VALUE> void parseSetting(option<VALUE>& setting, pt::iptree *node, parseDirection direction, parseFormat format = parseFormat::DEFAULT);
   template <typename VALUE> void parseSetting(optionVector<VALUE>& setting, pt::iptree *node, parseDirection direction, parseFormat format = parseFormat::DEFAULT);

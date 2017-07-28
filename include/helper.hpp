@@ -109,6 +109,24 @@ inline bool noValuesSet(std::vector<boost::optional<T>>& vec, size_t startidx = 
   return true;
 }
 
+/// finds the common root-prefix for the enums in the given boost::bimap (e.g. "CAEN_DGTZ_")
+template <class CAEN_ENUM>
+inline std::string findEnumRoot(boost::bimap< std::string, CAEN_ENUM >& map){
+  std::string root = map.left.begin()->first;
+  for(const auto& item : map.left){
+    if (root.length() > item.first.length()){
+      root.erase(item.first.length(), std::string::npos);
+    }
+    for(int i = 0; i < root.length(); ++i){
+      if (root[i] != item.first[i]){
+        root.erase(i, std::string::npos);
+        break;
+      }
+    }
+  }
+  return root;
+}
+
 /** splits a comma-separated list of values and ranges into
     individual values, returns these as vector */
 inline std::vector<int> expandRange(std::string range){
