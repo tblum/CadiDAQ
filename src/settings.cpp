@@ -208,6 +208,9 @@ template <typename VALUE> void cadidaq::settingsBase::parseSetting(std::string s
           node->put(settingName + "[" + std::to_string(index) + "]", **it);
         }
       } else {
+        // TODO: this log messages should be degraded to 'debug' at a later
+        // stage when we are confident in the correct parsing of all parameters
+        // for all different models and FW versions
         CFG_LOG_WARN << "Value for '" << settingName << "' not defined for channel #" << std::to_string(index) << " when generating configuration. Setting will be omitted in output.";
       }
     }
@@ -268,6 +271,8 @@ cadidaq::registerSettings::registerSettings(std::string name, uint nchannels) : 
   externalTriggerMode = std::make_pair(boost::none, "ExternalTriggerMode");
   ioLevel             = std::make_pair(boost::none, "IOLevel");
   chSelfTrigger       = std::make_pair(Vec<CAEN_DGTZ_TriggerMode_t>(nchannels), "ChannelSelfTrigger");
+  chTriggerThreshold  = std::make_pair(Vec<uint32_t>(nchannels), "ChannelTriggerTreshold");
+  chTriggerPolarity   = std::make_pair(Vec<CAEN_DGTZ_TriggerPolarity_t>(nchannels), "ChannelTriggerPolarity");
 
   // acquisition settings
   acquisitionMode     = std::make_pair(boost::none, "AcquisitionMode");
@@ -291,6 +296,8 @@ void cadidaq::registerSettings::processPTree(pt::iptree *node, parseDirection di
   parseSetting(externalTriggerMode, node, direction);
   parseSetting(ioLevel, node, direction);
   parseSetting(chSelfTrigger, node, direction);
+  parseSetting(chTriggerThreshold, node, direction);
+  parseSetting(chTriggerPolarity, node, direction);
 
   // acquisition
   parseSetting(recordLength, node, direction);

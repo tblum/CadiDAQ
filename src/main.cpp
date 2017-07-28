@@ -78,9 +78,9 @@ template <typename T, typename C> void programWrapper(caen::Digitizer* instance,
     // TODO: more fine-grained error handling, more info on log
     MAIN_LOG_ERROR << "Caught exception when communicating with digitizer " << instance->modelName() << ", serial " << instance->serialNumber() << ":";
     if (direction == comDirection::WRITING)
-      MAIN_LOG_ERROR << "\t Calling " << e.where() << " for channel " << channel << " with argument '" << std::to_string(value) << "' caused exception: " << e.what();
+      MAIN_LOG_ERROR << "\t Calling " << e.where() << " for channel/group " << channel << " with argument '" << std::to_string(value) << "' caused exception: " << e.what();
     else
-      MAIN_LOG_ERROR << "\t Calling " << e.where() << " for channel " << channel << " caused exception: " << e.what();
+      MAIN_LOG_ERROR << "\t Calling " << e.where() << " for channel/group " << channel << " caused exception: " << e.what();
   }
 }
 
@@ -156,6 +156,14 @@ void programLoopWrapper(caen::Digitizer* digitizer, void (caen::Digitizer::*writ
   }
 }
 
+/** Implements checks on the configuration options.
+    This should take into account all 'Note:' parts of the CAEN digitizer library documentation for the supported models/FW versions. */
+void verify(){
+  // TODO: Trigger Polarity: channel parameter is unused (i.e. the setting is common to all channels) for those digitizers that do not support the individual trigger polarity setting. Please refer to the Registers Description document of the relevant board for check
+  // TODO: Trigger Polarity: not for DPP FW
+  // TODO: ChannelTriggerThreshold not for DPP FW (inform about alternative setting)
+  // TODO: MaxNumEventsBLT: if using DPP-PHA, DPP-PSD or DPP-CI firmware, you have to refer to the SetDPPEventAggregation function.
+}
 
 /** Implements model/FW-specific settings verification and the calls mapping read/write methods from/to the digitizer and the corresponding the settings.
 
@@ -172,14 +180,34 @@ void programSettings(caen::Digitizer* digitizer, cadidaq::registerSettings* sett
   programWrapper(digitizer, &caen::Digitizer::setSWTriggerMode, &caen::Digitizer::getSWTriggerMode, settings->swTriggerMode.first, direction);
   programWrapper(digitizer, &caen::Digitizer::setExternalTriggerMode, &caen::Digitizer::getExternalTriggerMode, settings->externalTriggerMode.first, direction);
   programWrapper(digitizer, &caen::Digitizer::setIOlevel, &caen::Digitizer::getIOlevel, settings->ioLevel.first, direction);
+  if (!digitizer->hasDppFw()){
+    // Standard FW only
+
+    // NOTE: Trigger Polarity: channel parameter is unused (i.e. the setting is common to all channels) for those digitizers that do not support the individual trigger polarity setting. Please refer to the Registers Description document of the relevant board for check
+    programLoopWrapper(digitizer, &caen::Digitizer::setTriggerPolarity, &caen::Digitizer::getTriggerPolarity, settings->chTriggerPolarity, direction);
+    // settings different to devices with grouped/ungrouped channels
+    if (digitizer->groups() == 1){
+      // no grouped channels
+      programLoopWrapper(digitizer, &caen::Digitizer::setChannelTriggerThreshold, &caen::Digitizer::getChannelTriggerThreshold, settings->chTriggerThreshold, direction);
+    } else {
+      // channels are grouped
+      programLoopWrapper(digitizer, &caen::Digitizer::setGroupTriggerThreshold, &caen::Digitizer::getGroupTriggerThreshold, settings->chTriggerThreshold, direction);
+    }
+  } else {
+    // DPP FW only
+    
+  } // hasDPP
+  // Standard FW and DPP, either grouped or non-grouped channels:
   if (digitizer->groups() == 1){
     // no grouped channels
+    // TODO: find out whether or not to call this with DPP FW present! Documentation not 100% clear on that.. (use DPPParams.selft = ... instead?)
     programLoopWrapper(digitizer, &caen::Digitizer::setChannelSelfTrigger, &caen::Digitizer::getChannelSelfTrigger, settings->chSelfTrigger, direction);
   } else {
     // channels are grouped
     // TODO: find out whether or not to call this with DPP FW present! Documentation not 100% clear on that.. (use DPPParams.selft = ... instead?)
     programLoopWrapper(digitizer, &caen::Digitizer::setGroupSelfTrigger, &caen::Digitizer::getGroupSelfTrigger, settings->chSelfTrigger, direction);
   }
+
 
   /* acquisition */
   // setRecordLength requires subsequent call to SetPostTriggerSize
@@ -193,6 +221,7 @@ void programSettings(caen::Digitizer* digitizer, cadidaq::registerSettings* sett
   } else {
     // channels are grouped
     programMaskWrapper(digitizer, &caen::Digitizer::setGroupEnableMask, &caen::Digitizer::getGroupEnableMask, settings->chEnable, direction);
+    // NOTE: GroupDCOffset: from AMC FPGA firmware release 0.10 on, it is possible to apply an 8-bit positive digital offset individually to each channel inside a group of the x740 digitizer to finely correct the baseline mismatch. This function is not supported by the CAENdigitizer library, but the user can refer the registers documentation.
     programLoopWrapper(digitizer, &caen::Digitizer::setGroupDCOffset, &caen::Digitizer::getGroupDCOffset, settings->chDCOffset, direction);
   }
 }
