@@ -60,11 +60,11 @@ std::string describeValidValues(){
 }
 template <>
 std::string describeValidValues<uint32_t>(){
-  return std::string("32-bit wide integer in base 10 or hex notation");
+  return std::string("32-bit wide integer in base 10 or hex notation with '0x' prefix");
 }
 template <>
 std::string describeValidValues<int>(){
-  return std::string("integer in base 10 or hex notation");
+  return std::string("integer in base 10 or hex notation with '0x' prefix");
 }
 template <>
 std::string describeValidValues<bool>(){
@@ -147,58 +147,52 @@ template <class VALUE> void cadidaq::settingsBase::parseSetting(std::string sett
 
 template <typename VALUE> void cadidaq::settingsBase::parseSetting(std::string settingName, pt::iptree *node, std::vector<boost::optional<VALUE>>& settingValue, parseDirection direction, parseFormat format){
   if (direction == parseDirection::READING){
+    std::vector<std::string> matchingKeys;
     // get the setting's value from the ptree by looping over all entries of "settingName[RANGE]"
-    // important: to keep the iteration stable even when erasing parsed entries, the iterator increment is handled below
+    for (auto&& key : *node)
+      if (boost::istarts_with(key.first, settingName))
+        matchingKeys.push_back(key.first);
 
-    // TODO: move this over to use a call to parseSetting to retrieve the actual value after the key string deconstruction
-    for (auto key = node->begin(); key != node->end();){
-      if (boost::istarts_with(key->first, settingName)){
-        CFG_LOG_DEBUG << "Found a matching key: '" << key->first << "' with value '" << key->second.get_value<std::string>() << "'";
-        std::string range = boost::erase_head_copy(key->first, settingName.length());
-        // remove the brackets or parenthesis and any remaining whitespace
-        boost::trim_left_if(range,boost::is_any_of("[("));
-        boost::trim_right_if(range,boost::is_any_of(")]"));
-        // make sure that there are no characters present that we can't parse
-        if (!boost::all(range,boost::is_any_of(",-")||boost::is_digit() || boost::is_space())){
-          CFG_LOG_ERROR << "Could not parse range '" << range << "' specified in setting '" << key->first << "' with value '" << key->second.get_value<std::string>() << "'. Only allowed characters are '-', ',' and digits.";
+    if (matchingKeys.empty()){
+      CFG_LOG_DEBUG << "Found no matching keys for setting " << settingName;
+      return;
+    } else
+      CFG_LOG_DEBUG << "Found " << matchingKeys.size() << " matching keys for setting '" << settingName << "'";
+
+    for (auto&& it : matchingKeys){
+      // extract the range
+      std::string range = boost::erase_head_copy(it, settingName.length());
+      // remove the brackets or parenthesis and any remaining whitespace
+      boost::trim_left_if(range,boost::is_any_of("[("));
+      boost::trim_right_if(range,boost::is_any_of(")]"));
+      // make sure that there are no characters present that we can't parse
+      if (!boost::all(range,boost::is_any_of(",-")||boost::is_digit() || boost::is_space())){
+        CFG_LOG_ERROR << "Could not parse range '" << range << "' specified in setting '" << it << "'. Only allowed characters are '-', ',' and digits.";
+        continue;
+      }
+      // now split the range into individual channel numbers
+      std::vector<int> v = expandRange(range);
+
+      // output the parsed range for debugging purposes
+      std::stringstream expandedrange;
+      for(auto x:v)
+        expandedrange << std::to_string(x) << " ";
+      CFG_LOG_DEBUG << "Expanded range '" << range << "' into " << expandedrange.str();
+
+      // loop over parsed range and set the values in the settings vector
+      boost::optional<VALUE> value;
+      parseSetting(it, node, value, direction);
+      if (!value) continue; // value not valid, try next key
+      for(auto x:v){
+        try{
+          settingValue.at(x) = *value;
+        }
+        catch (const std::out_of_range& e) {
+          CFG_LOG_ERROR << "Channel number '" << std::to_string(x) << "' in setting '" << settingName << "' is out of range!";
           continue;
         }
-        // now split the range into individual channel numbers
-        std::vector<int> v = expandRange(range);
-
-        // output the parsed range for debugging purposes
-        std::stringstream expandedrange;
-        for(auto x:v)
-          expandedrange << std::to_string(x) << " ";
-        CFG_LOG_DEBUG << "Expanded range '" << range << "' into " << expandedrange.str();
-
-        // loop over parsed range and set the values in the settings vector
-        for(auto x:v){
-            try{
-              settingValue.at(x) = key->second.get_value<VALUE>();
-            }
-            catch (const std::out_of_range& e) {
-              CFG_LOG_ERROR << "Channel number '" << std::to_string(x) << "' in setting '" << settingName << "' is out of range!";
-              continue;
-            }
-            catch (const pt::ptree_bad_data& e) {
-              CFG_LOG_ERROR << "Error parsing setting '" << settingName << "': " << e.what() << ". Offending value: " << key->second.get_value<std::string>();
-              break;
-            }
-          // } else {
-          //   // retrieve the value by converting via the CAEN enum bimap
-          //   convertToEnum(settingName, key->second.get_value<std::string>(), settingValue, map);
-          // }
-        }
-        // erase the now-parsed key from the ptree node
-        // important: to keep the iteration stable over erases we have to use the iterator returned from the erase operation!
-        key = node->erase(key);
-      } // match settingName*
-      else {
-        // non-match, go to next key
-        ++key;
       }
-    } // for (key:node)
+    } // matchingKeys
   } else {
     // direction: WRITING
     // TODO: write range compression to get setting string as in "settingName[RANGE]"
@@ -206,17 +200,13 @@ template <typename VALUE> void cadidaq::settingsBase::parseSetting(std::string s
     for (auto it = settingValue.begin(); it != settingValue.end(); ++it) {
       auto index = std::distance(settingValue.begin(), it);
       if (*it) {
-          if (format == parseFormat::HEX){
-            std::stringstream ss;
-            ss << std::hex << std::showbase << **it; // might need e.g. std::setfill ('0') and std::setw(sizeof(your_type)*2)
-            node->put(settingName + "[" + std::to_string(index) + "]", ss.str());
-          } else {
-            node->put(settingName + "[" + std::to_string(index) + "]", **it);
-          }
-        // } else {
-        //   // if map provided: convert CAEN enum to string
-        //   node->put(settingName + "[" + std::to_string(index) + "]", *convertFromEnum(settingName, settingValue, map));
-        // }
+        if (format == parseFormat::HEX){
+          std::stringstream ss;
+          ss << std::hex << std::showbase << **it; // might need e.g. std::setfill ('0') and std::setw(sizeof(your_type)*2)
+          node->put(settingName + "[" + std::to_string(index) + "]", ss.str());
+        } else {
+          node->put(settingName + "[" + std::to_string(index) + "]", **it);
+        }
       } else {
         CFG_LOG_WARN << "Value for '" << settingName << "' not defined for channel #" << std::to_string(index) << " when generating configuration. Setting will be omitted in output.";
       }
@@ -224,27 +214,6 @@ template <typename VALUE> void cadidaq::settingsBase::parseSetting(std::string s
   }
 }
 
-
-// template <typename VALUE> void cadidaq::settingsBase::parseSetting(std::string settingName, pt::iptree *node, boost::optional<VALUE>& settingValue, parseDirection direction){
-//   if (direction == parseDirection::READING){
-//     boost::optional<std::string> str;
-//     // get the setting's value from the ptree and append
-//     parseSetting(settingName, node, str, direction);
-//     if (str){
-//       convertToEnum(settingName, *str, settingValue, map);
-//     } else {
-//       settingValue = boost::none;
-//     }
-//   } else {
-//     // direction: WRITING
-
-//     // check that setting's value (boost::optional) is actually set
-//     if (!settingValue) return;
-
-//     // add key to ptree
-//     parseSetting(settingName, node, convertFromEnum(settingName, settingValue, map), direction);
-//   }
-// }
 
 template <class VALUE> void cadidaq::settingsBase::parseSetting(option<VALUE>& setting, pt::iptree *node, parseDirection direction, parseFormat format){
   parseSetting(setting.second, node, setting.first, direction, format);
