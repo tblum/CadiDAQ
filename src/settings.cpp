@@ -272,6 +272,8 @@ cadidaq::registerSettings::registerSettings(std::string name, uint nchannels) : 
   chSelfTrigger       = std::make_pair(Vec<CAEN_DGTZ_TriggerMode_t>(nchannels), "ChannelSelfTrigger");
   chTriggerThreshold  = std::make_pair(Vec<uint32_t>(nchannels), "ChannelTriggerTreshold");
   chTriggerPolarity   = std::make_pair(Vec<CAEN_DGTZ_TriggerPolarity_t>(nchannels), "ChannelTriggerPolarity");
+  runSyncMode         = std::make_pair(boost::none, "RunSynchronizationMode");
+  outSignalMode       = std::make_pair(boost::none, "OutputSignalMode");
 
   // acquisition settings
   acquisitionMode     = std::make_pair(boost::none, "AcquisitionMode");
@@ -279,6 +281,7 @@ cadidaq::registerSettings::registerSettings(std::string name, uint nchannels) : 
   postTriggerSize     = std::make_pair(boost::none, "PostTriggerSize");
   chEnable            = std::make_pair(Vec<bool>(nchannels), "EnableChannel");
   chDCOffset          = std::make_pair(Vec<uint32_t>(nchannels), "ChannelDCOffset");
+  desMode             = std::make_pair(boost::none, "DESMode");
 
 }
 
@@ -297,6 +300,8 @@ void cadidaq::registerSettings::processPTree(pt::iptree *node, parseDirection di
   parseSetting(chSelfTrigger, node, direction);
   parseSetting(chTriggerThreshold, node, direction);
   parseSetting(chTriggerPolarity, node, direction);
+  parseSetting(runSyncMode, node, direction);
+  parseSetting(outSignalMode, node, direction);
 
   // acquisition
   parseSetting(recordLength, node, direction);
@@ -304,6 +309,7 @@ void cadidaq::registerSettings::processPTree(pt::iptree *node, parseDirection di
   parseSetting(acquisitionMode, node, direction);
   parseSetting(chEnable, node, direction);
   parseSetting(chDCOffset, node, direction);
+  parseSetting(desMode, node, direction);
 
   CFG_LOG_DEBUG << "Done with processing register settings property tree";
 

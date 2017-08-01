@@ -99,6 +99,8 @@ public:
   optionVector<CAEN_DGTZ_TriggerMode_t>     chSelfTrigger;
   optionVector<uint32_t>                    chTriggerThreshold;
   optionVector<CAEN_DGTZ_TriggerPolarity_t> chTriggerPolarity;
+  option<CAEN_DGTZ_RunSyncMode_t>           runSyncMode;
+  option<CAEN_DGTZ_OutputSignalMode_t>      outSignalMode;
 
   // acquisition settings
   option<CAEN_DGTZ_AcqMode_t>               acquisitionMode;
@@ -106,6 +108,7 @@ public:
   option<uint32_t>                          postTriggerSize;
   optionVector<bool>                        chEnable;
   optionVector<uint32_t>                    chDCOffset;
+  option<CAEN_DGTZ_EnaDis_t>                desMode;
 
 private:
   virtual void processPTree(pt::iptree *node, parseDirection direction);

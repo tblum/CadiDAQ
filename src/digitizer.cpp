@@ -253,6 +253,8 @@ void cadidaq::digitizer::programSettings(comDirection direction){
   programWrapper(&caen::Digitizer::setSWTriggerMode, &caen::Digitizer::getSWTriggerMode, reg->swTriggerMode.first, direction);
   programWrapper(&caen::Digitizer::setExternalTriggerMode, &caen::Digitizer::getExternalTriggerMode, reg->externalTriggerMode.first, direction);
   programWrapper(&caen::Digitizer::setIOlevel, &caen::Digitizer::getIOlevel, reg->ioLevel.first, direction);
+  programWrapper(&caen::Digitizer::setRunSynchronizationMode, &caen::Digitizer::getRunSynchronizationMode, reg->runSyncMode.first, direction);
+  programWrapper(&caen::Digitizer::setOutputSignalMode, &caen::Digitizer::getOutputSignalMode, reg->outSignalMode.first, direction);
   if (!dg->hasDppFw()){
     // Standard FW only
 
@@ -281,7 +283,6 @@ void cadidaq::digitizer::programSettings(comDirection direction){
     programLoopWrapper(&caen::Digitizer::setGroupSelfTrigger, &caen::Digitizer::getGroupSelfTrigger, reg->chSelfTrigger, direction);
   }
 
-
   /* acquisition */
   // setRecordLength requires subsequent call to SetPostTriggerSize
   programWrapper(&caen::Digitizer::setAcquisitionMode, &caen::Digitizer::getAcquisitionMode, reg->acquisitionMode.first, direction);
@@ -296,5 +297,9 @@ void cadidaq::digitizer::programSettings(comDirection direction){
     programMaskWrapper(&caen::Digitizer::setGroupEnableMask, &caen::Digitizer::getGroupEnableMask, reg->chEnable, direction);
     // NOTE: GroupDCOffset: from AMC FPGA firmware release 0.10 on, it is possible to apply an 8-bit positive digital offset individually to each channel inside a group of the x740 digitizer to finely correct the baseline mismatch. This function is not supported by the CAENdigitizer library, but the user can refer the registers documentation.
     programLoopWrapper(&caen::Digitizer::setGroupDCOffset, &caen::Digitizer::getGroupDCOffset, reg->chDCOffset, direction);
+  }
+  // X751-family specific settings
+  if (dg->is751Family()){
+    programWrapper(&caen::Digitizer::setDESMode, &caen::Digitizer::getDESMode, reg->desMode.first, direction);
   }
 }
