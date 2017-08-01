@@ -283,6 +283,10 @@ cadidaq::registerSettings::registerSettings(std::string name, uint nchannels) : 
   chDCOffset          = std::make_pair(Vec<uint32_t>(nchannels), "ChannelDCOffset");
   desMode             = std::make_pair(boost::none, "DESMode");
 
+  // DPP-FW settings
+  dppPreTriggerSize   = std::make_pair(Vec<uint32_t>(nchannels), "DPPPreTriggerSize");
+  dppChPulsePolarity    = std::make_pair(Vec<CAEN_DGTZ_PulsePolarity_t>(nchannels), "DPPChannelPulsePolarity");
+
 }
 
 
@@ -310,6 +314,10 @@ void cadidaq::registerSettings::processPTree(pt::iptree *node, parseDirection di
   parseSetting(chEnable, node, direction);
   parseSetting(chDCOffset, node, direction);
   parseSetting(desMode, node, direction);
+
+  // DPP-FW
+  parseSetting(dppPreTriggerSize, node, direction);
+  parseSetting(dppChPulsePolarity, node, direction);
 
   CFG_LOG_DEBUG << "Done with processing register settings property tree";
 

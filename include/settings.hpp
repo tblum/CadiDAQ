@@ -89,10 +89,10 @@ public:
 
   void verify();
 
-  // data readout settings
+  /// data readout settings
   option<uint32_t> maxNumEventsBLT;
 
-  // trigger settings
+  /// trigger settings
   option<CAEN_DGTZ_TriggerMode_t>           swTriggerMode;
   option<CAEN_DGTZ_TriggerMode_t>           externalTriggerMode;
   option<CAEN_DGTZ_IOLevel_t>               ioLevel;
@@ -102,13 +102,18 @@ public:
   option<CAEN_DGTZ_RunSyncMode_t>           runSyncMode;
   option<CAEN_DGTZ_OutputSignalMode_t>      outSignalMode;
 
-  // acquisition settings
+  /// acquisition settings
   option<CAEN_DGTZ_AcqMode_t>               acquisitionMode;
   option<uint32_t>                          recordLength;
   option<uint32_t>                          postTriggerSize;
   optionVector<bool>                        chEnable;
   optionVector<uint32_t>                    chDCOffset;
   option<CAEN_DGTZ_EnaDis_t>                desMode;
+
+  /// DPP-FW settings
+  optionVector<uint32_t>                    dppPreTriggerSize;
+  optionVector<CAEN_DGTZ_PulsePolarity_t>   dppChPulsePolarity;
+
 
 private:
   virtual void processPTree(pt::iptree *node, parseDirection direction);

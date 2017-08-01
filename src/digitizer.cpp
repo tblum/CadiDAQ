@@ -192,10 +192,14 @@ void cadidaq::digitizer::programMaskWrapper(void (caen::Digitizer::*write)(uint3
 
 
 template <typename T, typename C>
-void cadidaq::digitizer::programLoopWrapper(void (caen::Digitizer::*write)(C, T), T (caen::Digitizer::*read)(C), cadidaq::settingsBase::optionVector<T> &vec, comDirection direction){
+void cadidaq::digitizer::programLoopWrapper(void (caen::Digitizer::*write)(C, T), T (caen::Digitizer::*read)(C), cadidaq::settingsBase::optionVector<T> &vec, comDirection direction, bool ignoreGroups = false){
+  int ngroups = dg->groups();
+  // if groups are to be ignored
+  if (ignoreGroups)
+    ngroups = 1;
   // verify that the vector can be put into group structure of the device (if channels are grouped)
-  if (dg->groups()>1){
-    for (int i = 0; i<dg->groups(); i++){
+  if (ngroups>1){
+    for (int i = 0; i<ngroups; i++){
       if (!allValuesSame(vec.first,i*dg->channelsPerGroup(), (i+1)*dg->channelsPerGroup()))
         DG_LOG_WARN << "The channels in the range " << i*dg->channelsPerGroup() << " and " << (i+1)*dg->channelsPerGroup() << " for '" << vec.second << "' are set to different values -> cannot consistently convert to groups supported by the device!";
     }
@@ -211,15 +215,15 @@ void cadidaq::digitizer::programLoopWrapper(void (caen::Digitizer::*write)(C, T)
         continue; // skip and leave default
     }
     // map channel number to group index (or set to one if NGroups==1)
-    C group = channel/dg->groups();
-    if (direction == comDirection::READING && channel%dg->groups() != 0)
+    C group = channel/ngroups;
+    if (direction == comDirection::READING && channel%ngroups != 0)
       continue; // only read once per group
 
     // perform the call to the digitizer
     programWrapper(write, read, group, value, direction);
     if (direction == comDirection::READING){
       *it = value;
-      if (dg->groups() > 1){
+      if (ngroups > 1){
         // set the other values in the group
         for (int i = group*dg->channelsPerGroup(); i<(group+1)*dg->channelsPerGroup(); i++){
           vec.first.at(i) = value;
@@ -302,4 +306,12 @@ void cadidaq::digitizer::programSettings(comDirection direction){
   if (dg->is751Family()){
     programWrapper(&caen::Digitizer::setDESMode, &caen::Digitizer::getDESMode, reg->desMode.first, direction);
   }
+
+  // DPP - FW
+  if (dg->hasDppFw()){
+    // loop wrapper is called with ignoreGroups = true as the DPP options are set channel-by-channel
+    programLoopWrapper(&caen::Digitizer::setDPPPreTriggerSize, &caen::Digitizer::getDPPPreTriggerSize, reg->dppPreTriggerSize, direction, true);
+    programLoopWrapper(&caen::Digitizer::setChannelPulsePolarity, &caen::Digitizer::getChannelPulsePolarity, reg->dppChPulsePolarity, direction, true);
+  }
+
 }
