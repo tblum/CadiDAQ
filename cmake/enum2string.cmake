@@ -101,6 +101,7 @@ function( enum2str_generate )
 
   # Remove comments
   string( REGEX REPLACE "//[^\n]*"                "" RAW_DATA "${RAW_DATA}" )
+  string( REGEX REPLACE "[*]+"                    "*" RAW_DATA "${RAW_DATA}" )
   string( REGEX REPLACE "/\\*([^*]|\\*[^/])*\\*/" "" RAW_DATA "${RAW_DATA}" )
 
   foreach( I IN LISTS OPTS_ENUMS )
@@ -124,10 +125,10 @@ function( enum2str_generate )
     # Extract only the enum
     string( REGEX MATCH "enum[ \t\n]+((struct|class)[ \t\n]+)?${ENUM_NAME}[ \t\n]*(:[^{]+)?{[^}]*}" P1 "${P0}" )
     if( "${P1}" STREQUAL "" )
-      string( REGEX MATCH "enum[ \t\n]+{[^}]*}[ \t\n]*${ENUM_NAME};" P1 "${P0}" )
+      string( REGEX MATCH "enum[ \t\n]*{[^}]*}[ \t\n]*${ENUM_NAME};" P1 "${P0}" )
 
       if( "${P1}" STREQUAL "" )
-        message( WARNING "enum '${I}' not found!" )
+        message( ERROR "enum '${I}' not found!" )
         continue()
       endif( "${P1}" STREQUAL "" )
     endif( "${P1}" STREQUAL "" )
