@@ -67,12 +67,34 @@ void read_ini_file(const char *filename)
       // ignoring "general" section for common digitizer settings (for now)
       if(boost::iequals(boost::algorithm::to_lower_copy(section.first), std::string("general")))
         continue;
-      // parse link settings
+      // retrieve this section's settings
       std::string digName = section.first;
-      pt::iptree &node = iniPTree.get_child(digName);
-      // configure and establish connection
-      cadidaq::digitizer* digi = new cadidaq::digitizer(section.first);
-      digi->configure(&node);
+      pt::iptree &nodeDigi = iniPTree.get_child(digName);
+      MAIN_LOG_INFO << "Found '" << digName << "' section in config file.";
+      // join the section with any setting in the general section (overwriting the latter where appropriate)
+      pt::iptree *node = new pt::iptree(); // need new pttree as not to modify the one read from the ini file
+      try {
+        // retrieve the "general" section of the config file to initialize defaults
+        pt::iptree &nodeGeneral = iniPTree.get_child("GENERAL");
+        MAIN_LOG_INFO << "Found 'General' section in config file and applying its values as default.";
+        // update the fresh node with settings from the general section
+        BOOST_FOREACH( auto& leaf, nodeGeneral ){
+            node->put_child( leaf.first, leaf.second );
+        }
+        // update the node with settings from the digitizer section, possibly overwriting values
+        BOOST_FOREACH( auto& leaf, nodeDigi ){
+          node->put_child( leaf.first, leaf.second );
+        }
+      }
+      catch (const pt::ptree_bad_path& e){
+        MAIN_LOG_DEBUG << "No 'General' section (with options valid for all digitizers) could be found in config file.";
+        // just use what is in the digitizer section
+        node = &nodeDigi;
+      }
+
+      // parse, establish connection and configure digitizer
+      cadidaq::digitizer* digi = new cadidaq::digitizer(digName);
+      digi->configure(node);
       vecDigi.push_back(digi);
 
     }
@@ -80,12 +102,14 @@ void read_ini_file(const char *filename)
     // TODO: init and run the actual "DAQ" part of the application here
 
     // write the config back to another file
+    std::string outIniFileName = "output.ini";
+    MAIN_LOG_INFO << "Reading back configuration from digitizer and writing to output file: " << outIniFileName;
     pt::iptree ptwrite; // create a new tree
     BOOST_FOREACH(cadidaq::digitizer *digi, vecDigi){
       pt::iptree *node = digi->retrieveConfig();
       ptwrite.put_child(digi->getName(), *node);
     }
-    pt::ini_parser::write_ini("output.ini", ptwrite);
+    pt::ini_parser::write_ini(outIniFileName, ptwrite);
 }
 
 
