@@ -31,8 +31,14 @@ inline uint32_t vec2Mask(std::vector<boost::optional<bool>>& vec, uint ngroups, 
 }
 
 /// fills the given bit mask into a vector of boost::optional<bool>
-inline  void mask2Vec(uint32_t mask, std::vector<boost::optional<bool>>& vec, uint ngroups = 1){
-  std::bitset<32> bits(mask);
+inline  void mask2Vec(boost::optional<uint32_t> mask, std::vector<boost::optional<bool>>& vec, uint ngroups = 1){
+  if (!mask){
+    // invalid argument -> set vector elements to boost::none
+    for (auto it = vec.begin(); it != vec.end(); ++it)
+      *it = boost::none;
+    return;
+  }
+  std::bitset<32> bits(*mask);
   for (auto it = vec.begin(); it != vec.end(); ++it) {
     auto index = std::distance(vec.begin(), it);
     uint group = index/ngroups;

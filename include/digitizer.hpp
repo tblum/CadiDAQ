@@ -32,13 +32,10 @@ namespace cadidaq {
     void verifySettings();
 
     template <typename T>
-    void programWrapper(void (caen::Digitizer::*write)(T), T (caen::Digitizer::*read)(), T &value, comDirection direction);
+    void programWrapper(void (caen::Digitizer::*write)(T), T (caen::Digitizer::*read)(), boost::optional<T> &value, comDirection direction);
 
     template <typename T, typename C>
-    void programWrapper(void (caen::Digitizer::*write)(C, T), T (caen::Digitizer::*read)(C), C channel, T &value, comDirection direction);
-
-    template <typename T>
-    void programWrapper(void (caen::Digitizer::*write)(T), T (caen::Digitizer::*read)(), boost::optional<T> &value, comDirection direction);
+    void programWrapper(void (caen::Digitizer::*write)(C, T), T (caen::Digitizer::*read)(C), C channel, boost::optional<T> &value, comDirection direction);
 
     void programMaskWrapper(void (caen::Digitizer::*write)(uint32_t), uint32_t (caen::Digitizer::*read)(), cadidaq::settingsBase::optionVector<bool> &vec, comDirection direction);
 

@@ -115,11 +115,12 @@ pt::iptree* cadidaq::digitizer::retrieveConfig(){
 
 
 template <typename T>
-void cadidaq::digitizer::programWrapper(void (caen::Digitizer::*write)(T), T (caen::Digitizer::*read)(), T &value, comDirection direction){
+void cadidaq::digitizer::programWrapper(void (caen::Digitizer::*write)(T), T (caen::Digitizer::*read)(), boost::optional<T> &value, comDirection direction){
   try{
     if (direction == comDirection::WRITING){
       // WRITING
-      (dg->*write)(value);
+      if (value)
+        (dg->*write)(*value);
     } else {
       // READING
       value = (dg->*read)();
@@ -129,18 +130,21 @@ void cadidaq::digitizer::programWrapper(void (caen::Digitizer::*write)(T), T (ca
     // TODO: more fine-grained error handling, more info on log
     DG_LOG_ERROR << "Caught exception when communicating with digitizer " << dg->modelName() << ", serial " << dg->serialNumber() << ":";
     if (direction == comDirection::WRITING)
-      DG_LOG_ERROR << "\t Calling " << e.where() << " with argument '" << std::to_string(value) << "' caused exception: " << e.what();
+      DG_LOG_ERROR << "\t Calling " << e.where() << " with argument '" << std::to_string(*value) << "' caused exception: " << e.what();
     else
       DG_LOG_ERROR << "\t Calling " << e.where() << " caused exception: " << e.what();
+    // setting assumed to be invalid regardless whether we read or write it:
+    value = boost::none;
   }
 }
 
 template <typename T, typename C>
-void cadidaq::digitizer::programWrapper(void (caen::Digitizer::*write)(C, T), T (caen::Digitizer::*read)(C), C channel, T &value, comDirection direction){
+void cadidaq::digitizer::programWrapper(void (caen::Digitizer::*write)(C, T), T (caen::Digitizer::*read)(C), C channel, boost::optional<T> &value, comDirection direction){
   try{
     if (direction == comDirection::WRITING){
       // WRITING
-      (dg->*write)(channel, value);
+      if (value)
+        (dg->*write)(channel, *value);
     } else {
       // READING
       value = (dg->*read)(channel);
@@ -150,29 +154,16 @@ void cadidaq::digitizer::programWrapper(void (caen::Digitizer::*write)(C, T), T 
     // TODO: more fine-grained error handling, more info on log
     DG_LOG_ERROR << "Caught exception when communicating with digitizer " << dg->modelName() << ", serial " << dg->serialNumber() << ":";
     if (direction == comDirection::WRITING)
-      DG_LOG_ERROR << "\t Calling " << e.where() << " for channel/group " << channel << " with argument '" << std::to_string(value) << "' caused exception: " << e.what();
+      DG_LOG_ERROR << "\t Calling " << e.where() << " for channel/group " << channel << " with argument '" << std::to_string(*value) << "' caused exception: " << e.what();
     else
       DG_LOG_ERROR << "\t Calling " << e.where() << " for channel/group " << channel << " caused exception: " << e.what();
-  }
-}
-
-template <typename T>
-void cadidaq::digitizer::programWrapper(void (caen::Digitizer::*write)(T), T (caen::Digitizer::*read)(), boost::optional<T> &value, comDirection direction){
-  // simple additional check to program only if:
-  // - optional value is set
-  // - or the value is being read out from the digitizer
-  if (value){
-    programWrapper(write, read, *value, direction);
-  } else if (direction == comDirection::READING){
-    // reading into dummy variable
-    T k;
-    programWrapper(write, read, k, direction);
-    value = k;
+    // setting assumed to be invalid regardless whether we read or write it:
+    value = boost::none;
   }
 }
 
 void cadidaq::digitizer::programMaskWrapper(void (caen::Digitizer::*write)(uint32_t), uint32_t (caen::Digitizer::*read)(), cadidaq::settingsBase::optionVector<bool> &vec, comDirection direction){
-  uint32_t mask = 0;
+  boost::optional<uint32_t> mask = 0;
   // derive the mask in case we are writing it
   if (direction == comDirection::WRITING){
     // check if the setting has been configured at all
@@ -207,11 +198,8 @@ void cadidaq::digitizer::programLoopWrapper(void (caen::Digitizer::*write)(C, T)
   // loop over vector's entries and READ/WRITE values from/to digitzer
   for (auto it = vec.first.begin(); it != vec.first.end(); ++it) {
     auto channel = std::distance(vec.first.begin(), it);
-    T value;
     if (direction == comDirection::WRITING){
-      if (*it)
-        value = **it;
-      else
+      if (!*it)
         continue; // skip and leave default
     }
     // map channel number to group index (or set to one if NGroups==1)
@@ -220,13 +208,12 @@ void cadidaq::digitizer::programLoopWrapper(void (caen::Digitizer::*write)(C, T)
       continue; // only read once per group
 
     // perform the call to the digitizer
-    programWrapper(write, read, group, value, direction);
+    programWrapper(write, read, group, *it, direction);
     if (direction == comDirection::READING){
-      *it = value;
       if (ngroups > 1){
         // set the other values in the group
         for (int i = group*dg->channelsPerGroup(); i<(group+1)*dg->channelsPerGroup(); i++){
-          vec.first.at(i) = value;
+          vec.first.at(i) = *it;
         }
       }
     }
