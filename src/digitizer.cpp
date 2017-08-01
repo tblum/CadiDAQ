@@ -97,10 +97,12 @@ void cadidaq::digitizer::configure(pt::iptree *node){
 
 pt::iptree* cadidaq::digitizer::retrieveConfig(){
   if (dg == nullptr){
-    DG_LOG_FATAL << "Digitizer '" << name << "' not yet configured!";
+    DG_LOG_FATAL << "Digitizer '" << name << "' not yet (properly) configured!";
     return nullptr;
   }
+  // read the settings back from the device
   programSettings(comDirection::READING);
+  // dump settings into a ptree
   pt::iptree *node = lnk->createPTree();
   reg->fillPTree(node);
   return node;
