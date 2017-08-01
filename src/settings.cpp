@@ -285,7 +285,9 @@ cadidaq::registerSettings::registerSettings(std::string name, uint nchannels) : 
 
   // DPP-FW settings
   dppPreTriggerSize   = std::make_pair(Vec<uint32_t>(nchannels), "DPPPreTriggerSize");
-  dppChPulsePolarity    = std::make_pair(Vec<CAEN_DGTZ_PulsePolarity_t>(nchannels), "DPPChannelPulsePolarity");
+  dppChPulsePolarity  = std::make_pair(Vec<CAEN_DGTZ_PulsePolarity_t>(nchannels), "DPPChannelPulsePolarity");
+  dppAcqMode          = std::make_pair(boost::none, "DPPAcquisitionMode");
+  dppAcqModeParam     = std::make_pair(boost::none, "DPPAcquisitionModeParameter");
 
 }
 
@@ -318,6 +320,8 @@ void cadidaq::registerSettings::processPTree(pt::iptree *node, parseDirection di
   // DPP-FW
   parseSetting(dppPreTriggerSize, node, direction);
   parseSetting(dppChPulsePolarity, node, direction);
+  parseSetting(dppAcqMode, node, direction);
+  parseSetting(dppAcqModeParam, node, direction);
 
   CFG_LOG_DEBUG << "Done with processing register settings property tree";
 
@@ -326,11 +330,20 @@ void cadidaq::registerSettings::processPTree(pt::iptree *node, parseDirection di
 
 void cadidaq::registerSettings::verify(){
   // TODO: implement "light" checks on e.g. critical options that are valid for all supported digitizer types/families (nothing model-dependent)
+
   // check that at least one channel is set to enable
   if (countTrue(chEnable.first) == 0)
     CFG_LOG_WARN << "No channel has been set to be enabled using setting '" << chEnable.second << "'!";
   else
     CFG_LOG_DEBUG << "Setting '" << chEnable.second << "' enables " << countTrue(chEnable.first) << " channels.";
+
+  // DPPAcquisitionMode requires two parameters to be set
+  if ((dppAcqMode.first && !dppAcqModeParam.first) || (!dppAcqMode.first && dppAcqModeParam.first)){
+    CFG_LOG_ERROR << "DPPAcquisitionMode requires two arguments and is missing either " << dppAcqMode.second << " or " << dppAcqModeParam.second << ". Cannot configure option!";
+    // for consistency, set the option to be ignored later
+    dppAcqMode.first = boost::none;
+    dppAcqModeParam.first = boost::none;
+  }
 
   CFG_LOG_DEBUG << "Done with verifying register settings.";
 }

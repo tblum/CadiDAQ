@@ -162,6 +162,35 @@ void cadidaq::digitizer::programWrapper(void (caen::Digitizer::*write)(C, T), T 
   }
 }
 
+template <typename T1, typename T2>
+void cadidaq::digitizer::programWrapper(void (caen::Digitizer::*write)(T1, T2), void (caen::Digitizer::*read)(T1&, T2&), boost::optional<T1> &value1, boost::optional<T2> &value2, comDirection direction){
+  try{
+    if (direction == comDirection::WRITING){
+      // WRITING
+      if (value1 && value2)
+        (dg->*write)(*value1, *value2);
+    } else {
+      // READING
+      T1 v1;
+      T2 v2;
+      (dg->*read)(v1, v2);
+      value1 = v1;
+      value2 = v2;
+    }
+  }
+  catch (caen::Error& e){
+    // TODO: more fine-grained error handling, more info on log
+    DG_LOG_ERROR << "Caught exception when communicating with digitizer " << dg->modelName() << ", serial " << dg->serialNumber() << ":";
+    if (direction == comDirection::WRITING)
+      DG_LOG_ERROR << "\t Calling " << e.where() << " with arguments '" << std::to_string(*value1) << "', '" << std::to_string(*value2) << "' caused exception: " << e.what();
+    else
+      DG_LOG_ERROR << "\t Calling " << e.where() << " caused exception: " << e.what();
+    // setting assumed to be invalid regardless whether we read or write it:
+    value1 = boost::none;
+    value2 = boost::none;
+  }
+}
+
 void cadidaq::digitizer::programMaskWrapper(void (caen::Digitizer::*write)(uint32_t), uint32_t (caen::Digitizer::*read)(), cadidaq::settingsBase::optionVector<bool> &vec, comDirection direction){
   boost::optional<uint32_t> mask = 0;
   // derive the mask in case we are writing it
@@ -296,9 +325,10 @@ void cadidaq::digitizer::programSettings(comDirection direction){
 
   // DPP - FW
   if (dg->hasDppFw()){
-    // loop wrapper is called with ignoreGroups = true as the DPP options are set channel-by-channel
+    // loop wrapper is called with ignoreGroups = true as the DPP options are set channel-by-channel in contrast to the non-DPP channel options
     programLoopWrapper(&caen::Digitizer::setDPPPreTriggerSize, &caen::Digitizer::getDPPPreTriggerSize, reg->dppPreTriggerSize, direction, true);
     programLoopWrapper(&caen::Digitizer::setChannelPulsePolarity, &caen::Digitizer::getChannelPulsePolarity, reg->dppChPulsePolarity, direction, true);
-  }
+    programWrapper(&caen::Digitizer::setDPPAcquisitionMode, &caen::Digitizer::getDPPAcquisitionMode, reg->dppAcqMode.first, reg->dppAcqModeParam.first, direction);
+}
 
 }

@@ -113,6 +113,8 @@ public:
   /// DPP-FW settings
   optionVector<uint32_t>                    dppPreTriggerSize;
   optionVector<CAEN_DGTZ_PulsePolarity_t>   dppChPulsePolarity;
+  option<CAEN_DGTZ_DPP_AcqMode_t>           dppAcqMode;
+  option<CAEN_DGTZ_DPP_SaveParam_t>         dppAcqModeParam;
 
 
 private:

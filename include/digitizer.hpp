@@ -37,6 +37,9 @@ namespace cadidaq {
     template <typename T, typename C>
     void programWrapper(void (caen::Digitizer::*write)(C, T), T (caen::Digitizer::*read)(C), C channel, boost::optional<T> &value, comDirection direction);
 
+    template <typename T1, typename T2>
+    void programWrapper(void (caen::Digitizer::*write)(T1, T2), void (caen::Digitizer::*read)(T1&, T2&), boost::optional<T1> &value1, boost::optional<T2> &value2, comDirection direction);
+
     void programMaskWrapper(void (caen::Digitizer::*write)(uint32_t), uint32_t (caen::Digitizer::*read)(), cadidaq::settingsBase::optionVector<bool> &vec, comDirection direction);
 
     template <typename T, typename C>
