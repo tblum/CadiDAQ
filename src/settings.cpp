@@ -138,7 +138,7 @@ template <class VALUE> void cadidaq::settingsBase::parseSetting(std::string sett
         node->put(settingName, *settingValue);
       }
     } else {
-      CFG_LOG_WARN << "Value for '" << settingName << "' not defined when generating configuration. Setting will be omitted in output.";
+      CFG_LOG_DEBUG << "Value for '" << settingName << "' not defined when writing configuration. Setting will be omitted in output.";
     }
   }
 }
@@ -210,7 +210,7 @@ template <typename VALUE> void cadidaq::settingsBase::parseSetting(std::string s
         // TODO: this log messages should be degraded to 'debug' at a later
         // stage when we are confident in the correct parsing of all parameters
         // for all different models and FW versions
-        CFG_LOG_WARN << "Value for '" << settingName << "' not defined for channel #" << std::to_string(index) << " when generating configuration. Setting will be omitted in output.";
+        CFG_LOG_DEBUG << "Value for '" << settingName << "' not defined for channel #" << std::to_string(index) << " when writing configuration. Setting will be omitted in output.";
       }
     }
   }
