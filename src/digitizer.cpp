@@ -69,7 +69,7 @@ void cadidaq::digitizer::configure(pt::iptree *node){
     }
   }
   // status printout
-  DG_LOG_DEBUG << "Connected to digitzer '" << name << "'" << std::endl
+  DG_LOG_INFO << "Connected to digitzer '" << name << "'" << std::endl
                  << "\t Model:\t\t"           << dg->modelName() << " (numeric model number: " << dg->modelNo() << ")" << std::endl
                  << "\t NChannels:\t"         << dg->channels() << " (in " << dg->groups() << " groups)" << std::endl
                  << "\t ADC bits:\t"          << dg->ADCbits() << std::endl
