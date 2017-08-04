@@ -115,7 +115,7 @@ public:
   optionVector<CAEN_DGTZ_PulsePolarity_t>   dppChPulsePolarity;
   option<CAEN_DGTZ_DPP_AcqMode_t>           dppAcqMode;
   option<CAEN_DGTZ_DPP_SaveParam_t>         dppAcqModeParam;
-
+  option<CAEN_DGTZ_DPP_TriggerMode_t>       dppTriggermode;
 
 private:
   virtual void processPTree(pt::iptree *node, parseDirection direction);

@@ -256,6 +256,7 @@ void cadidaq::digitizer::verifySettings(){
   // TODO: Trigger Polarity: not for DPP FW
   // TODO: ChannelTriggerThreshold not for DPP FW (inform about alternative setting)
   // TODO: MaxNumEventsBLT: if using DPP-PHA, DPP-PSD or DPP-CI firmware, you have to refer to the SetDPPEventAggregation function.
+  // TOOD: options specific to one model should not be set if we are using one without that function
 }
 
 /** Implements model/FW-specific settings verification and the calls mapping read/write methods from/to the digitizer and the corresponding the settings.
@@ -325,10 +326,21 @@ void cadidaq::digitizer::programSettings(comDirection direction){
 
   // DPP - FW
   if (dg->hasDppFw()){
-    // loop wrapper is called with ignoreGroups = true as the DPP options are set channel-by-channel in contrast to the non-DPP channel options
-    programLoopWrapper(&caen::Digitizer::setDPPPreTriggerSize, &caen::Digitizer::getDPPPreTriggerSize, reg->dppPreTriggerSize, direction, true);
+    // NOTE: loop wrapper is called with ignoreGroups = true as the DPP options are set channel-by-channel in contrast to the non-DPP channel options
+    if (dg->isDppCiFw()){
+      // DPP-CI only supports ch= -1 (different channels must have the same pre-trigger)
+      if (!allValuesSame(reg->dppPreTriggerSize.first)){
+        DG_LOG_WARN << "Firmware only supports same pre-trigger for all channels but " << reg->dppPreTriggerSize.second << " not set to same value for all channels. Will apply value given for first channel to all.";
+      }
+      programWrapper(&caen::Digitizer::setDPPPreTriggerSize, &caen::Digitizer::getDPPPreTriggerSize, -1, reg->dppPreTriggerSize.first.at(0), direction);
+      // set other elements in the vector to same value for consistency
+      std::fill(reg->dppPreTriggerSize.first.begin(), reg->dppPreTriggerSize.first.end(), reg->dppPreTriggerSize.first.at(0));
+    } else {
+      programLoopWrapper(&caen::Digitizer::setDPPPreTriggerSize, &caen::Digitizer::getDPPPreTriggerSize, reg->dppPreTriggerSize, direction, true);
+    }
     programLoopWrapper(&caen::Digitizer::setChannelPulsePolarity, &caen::Digitizer::getChannelPulsePolarity, reg->dppChPulsePolarity, direction, true);
     programWrapper(&caen::Digitizer::setDPPAcquisitionMode, &caen::Digitizer::getDPPAcquisitionMode, reg->dppAcqMode.first, reg->dppAcqModeParam.first, direction);
+    programWrapper(&caen::Digitizer::setDPPTriggerMode, &caen::Digitizer::getDPPTriggerMode, reg->dppTriggermode.first, direction);
 }
 
 }
