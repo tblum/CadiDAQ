@@ -165,18 +165,27 @@ template <typename VALUE> void cadidaq::settingsBase::parseSetting(std::string s
       boost::trim_left_if(range,boost::is_any_of("[("));
       boost::trim_right_if(range,boost::is_any_of(")]"));
       // make sure that there are no characters present that we can't parse
-      if (!boost::all(range,boost::is_any_of(",-")||boost::is_digit() || boost::is_space())){
-        CFG_LOG_ERROR << "Could not parse range '" << range << "' specified in setting '" << it << "'. Only allowed characters are '-', ',' and digits.";
+      if (!boost::all(range,boost::is_any_of(",-*")||boost::is_digit() || boost::is_space())){
+        CFG_LOG_ERROR << "Could not parse range '" << range << "' specified in setting '" << it << "'. Only allowed characters are '*', '-', ',' and digits.";
         continue;
       }
       // now split the range into individual channel numbers
-      std::vector<int> v = expandRange(range);
+      std::vector<int> v;
+      // special treatment if the remaining character is an asterix
+      if (boost::find_first(range,"*")){
+        // use setting for all channels
+        for (int i = 0; i < settingValue.size(); i++) v.push_back(i);
+        CFG_LOG_DEBUG << "   Found '*' in range -> using settings's value for all channels";
+      } else {
+        // parse the range
+        v = expandRange(range);
+      }
 
       // output the parsed range for debugging purposes
       std::stringstream expandedrange;
       for(auto x:v)
         expandedrange << std::to_string(x) << " ";
-      CFG_LOG_DEBUG << "Expanded range '" << range << "' into " << expandedrange.str();
+      CFG_LOG_DEBUG << "   Expanded range '" << range << "' into " << expandedrange.str();
 
       // loop over parsed range and set the values in the settings vector
       boost::optional<VALUE> value;
