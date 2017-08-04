@@ -50,7 +50,7 @@ void read_ini_file(const char *filename)
     // parse the config file to determine number of digitizers
     int NDigitizer = 0;
     for (auto& section : iniPTree){
-      if(boost::iequals(boost::algorithm::to_lower_copy(section.first), std::string("daq")))
+      if(boost::iequals(boost::algorithm::to_lower_copy(section.first), std::string("cadidaq")))
         continue;
       if(boost::iequals(boost::algorithm::to_lower_copy(section.first), std::string("general")))
         continue;
@@ -62,7 +62,7 @@ void read_ini_file(const char *filename)
     // get the connection details for each digitizer section
     for (auto& section : iniPTree){
       // ignoring "daq" settings for main application
-      if(boost::iequals(boost::algorithm::to_lower_copy(section.first), std::string("daq")))
+      if(boost::iequals(boost::algorithm::to_lower_copy(section.first), std::string("cadidaq")))
         continue;
       // ignoring "general" section for common digitizer settings (for now)
       if(boost::iequals(boost::algorithm::to_lower_copy(section.first), std::string("general")))
