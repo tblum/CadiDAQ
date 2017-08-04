@@ -72,19 +72,25 @@ inline int countSet(std::vector<boost::optional<T>>& vec, size_t startidx = 0, s
   return nSet;
 }
 
-/// tests if all values in a vector of boost::optional are set to some identical value _or_ all are undefined (optionally limited to an index range startidx--stopidx)
+/// returns the first set value in a range of indexes in a vector of boost::optional _or_ returns a boost::optional set to boost::none if no element is set
 template <typename T>
-inline bool allValuesSame(std::vector<boost::optional<T>>& vec, size_t startidx = 0, size_t stopidx = std::numeric_limits<std::size_t>::max()){
-  boost::optional<T> value;
+inline boost::optional<T> getFirstSetValue(std::vector<boost::optional<T>>& vec, size_t startidx = 0, size_t stopidx = std::numeric_limits<std::size_t>::max()){
   // find first defined value in the idx range
   for (auto it = vec.begin(); it != vec.end(); ++it) {
     auto index = std::distance(vec.begin(), it);
     if (index >= startidx && index < stopidx && (*it)){
-      value = **it;
-      break;
+      return *it;
     }
   }
-  // now compare against all values
+  return boost::optional<T>(boost::none);
+}
+
+/// tests if all values in a vector of boost::optional are set to some identical value _or_ all are undefined (optionally limited to an index range startidx--stopidx)
+template <typename T>
+inline bool allValuesSame(std::vector<boost::optional<T>>& vec, size_t startidx = 0, size_t stopidx = std::numeric_limits<std::size_t>::max()){
+  // get value of first defined element
+  boost::optional<T> value = getFirstSetValue(vec, startidx, stopidx);
+  // compare against all values
   for (auto it = vec.begin(); it != vec.end(); ++it) {
     auto index = std::distance(vec.begin(), it);
     if (index >= startidx && index < stopidx && *it && (*it != value))
