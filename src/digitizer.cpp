@@ -341,6 +341,16 @@ void cadidaq::digitizer::programSettings(comDirection direction){
     programLoopWrapper(&caen::Digitizer::setChannelPulsePolarity, &caen::Digitizer::getChannelPulsePolarity, reg->dppChPulsePolarity, direction, true);
     programWrapper(&caen::Digitizer::setDPPAcquisitionMode, &caen::Digitizer::getDPPAcquisitionMode, reg->dppAcqMode.first, reg->dppAcqModeParam.first, direction);
     programWrapper(&caen::Digitizer::setDPPTriggerMode, &caen::Digitizer::getDPPTriggerMode, reg->dppTriggermode.first, direction);
-}
+  }
 
+  /* program address-value pairs configured individually */
+  for (auto r:reg->registerValues){
+    try{
+      dg->writeRegister(r.first, r.second);
+    }
+    catch (caen::Error& e){
+      DG_LOG_ERROR << "Caught exception when communicating with digitizer " << dg->modelName() << ", serial " << dg->serialNumber() << ":";
+      DG_LOG_ERROR << "\t Calling " << e.where() << " for address '" << hex2str(r.first) << "' and value '" <<  hex2str(r.second) << "' caused exception: " << e.what();
+    }
+  }
 }

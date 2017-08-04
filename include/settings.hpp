@@ -52,9 +52,12 @@ protected:
   enum class parseFormat {DEFAULT, HEX, CAENEnum};
   template <class VALUE> void parseSetting(std::string settingName, pt::iptree *node, boost::optional<VALUE>& settingValue, parseDirection direction, parseFormat format = parseFormat::DEFAULT);
   template <typename VALUE> void parseSetting(std::string settingName, pt::iptree *node, std::vector<boost::optional<VALUE>>& settingValue, parseDirection direction, parseFormat format = parseFormat::DEFAULT);
-  // overloaded methods using combined settings/setting's name nomenclature
+  /// overloaded methods using combined settings/setting's name nomenclature
   template <class VALUE> void parseSetting(option<VALUE>& setting, pt::iptree *node, parseDirection direction, parseFormat format = parseFormat::DEFAULT);
   template <typename VALUE> void parseSetting(optionVector<VALUE>& setting, pt::iptree *node, parseDirection direction, parseFormat format = parseFormat::DEFAULT);
+  /// method to parse arbitrary register address-value pairs
+  void parseRegisters(pt::iptree *node, std::vector< std::pair< uint32_t, uint32_t >>& registers, parseDirection direction);
+
 private:
   virtual void processPTree(pt::iptree *node, parseDirection direction){};
 };
@@ -89,8 +92,11 @@ public:
 
   void verify();
 
+  /// arbitrary register address-value pairs
+  std::vector<std::pair<uint32_t, uint32_t>> registerValues;
+
   /// data readout settings
-  option<uint32_t> maxNumEventsBLT;
+  option<uint32_t>                          maxNumEventsBLT;
 
   /// trigger settings
   option<CAEN_DGTZ_TriggerMode_t>           swTriggerMode;

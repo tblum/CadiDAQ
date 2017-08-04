@@ -164,7 +164,41 @@ inline std::vector<int> expandRange(std::string range){
   return v;
 }
 
-// identifies last element in an iteration 
+/// converts a string to a hex value
+inline boost::optional<uint32_t> str2hex(std::string str){
+  // clean input of spaces
+  boost::erase_all(str," ");
+  if (!str.empty()){
+      uint32_t i = 0;
+      if (boost::istarts_with(str, "0x")){
+        // treat as hex
+        std::stringstream ss(str);
+        ss >> std::hex >> i;
+        return boost::optional<uint32_t>(i);
+      } else {
+        // treat as number
+        try{
+          i = boost::lexical_cast<uint32_t>(str);
+        }
+        catch (boost::bad_lexical_cast){
+          return boost::optional<uint32_t>(boost::none);
+        }
+      }
+      // return result
+      return boost::optional<uint32_t>(i);
+    }
+  else
+    return boost::optional<uint32_t>(boost::none);
+}
+
+/// convert a uint32_t into a str in hex notation
+inline std::string hex2str(uint32_t i){
+  std::stringstream s;
+  s << std::hex << std::showbase << i;
+  return s.str();
+}
+
+/// identifies last element in an iteration 
 template <typename Iter, typename Cont>
 inline bool is_last(Iter iter, const Cont& cont){
   return (iter != cont.end()) && (next(iter) == cont.end());

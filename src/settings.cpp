@@ -226,6 +226,65 @@ template <typename VALUE> void cadidaq::settingsBase::parseSetting(std::string s
 }
 
 
+void cadidaq::settingsBase::parseRegisters(pt::iptree *node, std::vector< std::pair< uint32_t, uint32_t >>& registers, parseDirection direction){
+  std::string settingName = "SetRegister";
+  if (direction == parseDirection::READING){
+    std::vector<std::string> matchingKeys;
+    // get the setting's value from the ptree by looping over all entries of "settingName[RANGE]"
+    for (auto&& key : *node)
+      if (boost::istarts_with(key.first, settingName))
+        matchingKeys.push_back(key.first);
+
+    if (matchingKeys.empty()){
+      CFG_LOG_DEBUG << "Found no matching keys for setting " << settingName;
+      return;
+    } else
+      CFG_LOG_DEBUG << "Found " << matchingKeys.size() << " matching keys for setting '" << settingName << "'";
+
+    for (auto&& it : matchingKeys){
+      // extract the range
+      std::string address = boost::erase_head_copy(it, settingName.length());
+      // remove the brackets or parenthesis and any remaining whitespace
+      boost::trim_left_if(address,boost::is_any_of("[("));
+      boost::trim_right_if(address,boost::is_any_of(")]"));
+      // make sure that there are no characters present that we can't parse
+      if (!boost::all(address,boost::is_any_of("x,")||boost::is_digit() || boost::is_space())){
+        CFG_LOG_ERROR << "Could not parse register address '" << address << "' specified in setting '" << it << "'. Only allowed characters are comma-separated hex values.";
+        continue;
+      }
+      // retrieve the key's value
+      boost::optional<uint32_t> value;
+      parseSetting(it, node, value, direction);
+      if (!value) continue; // value not valid, try next key
+
+      // now split the potentially comma-separated address(es) into individual
+      // addresses and keep the address-value pair in the given vector
+      std::vector<std::string> strs;
+      boost::split(strs,address,boost::is_any_of(","));
+      // expand values
+      for (auto it:strs){
+        boost::optional<uint32_t> adr = str2hex(it);
+        if (!adr){
+          CFG_LOG_ERROR << "Could not convert register address '" << it << "' to a number. Only allowed characters are comma-separated hex values.";
+          continue;
+        }
+        registers.push_back(std::make_pair(*adr, *value));
+        CFG_LOG_DEBUG << "   Parsed config value '" << std::hex << std::showbase << *value <<  "' for register address " << *adr;
+      }
+    } // matchingKeys
+  } else {
+    // direction: WRITING
+    for (auto it = registers.begin(); it != registers.end(); ++it) {
+      std::stringstream v;
+      std::stringstream s;
+      s << settingName << "[" << std::hex << std::showbase << it->first << "]";
+      v << std::hex << std::showbase << it->second;
+      node->put(s.str(), v.str());
+    }
+  }
+}
+
+
 template <class VALUE> void cadidaq::settingsBase::parseSetting(option<VALUE>& setting, pt::iptree *node, parseDirection direction, parseFormat format){
   parseSetting(setting.second, node, setting.first, direction, format);
 }
@@ -333,6 +392,9 @@ void cadidaq::registerSettings::processPTree(pt::iptree *node, parseDirection di
   parseSetting(dppAcqMode, node, direction);
   parseSetting(dppAcqModeParam, node, direction);
   parseSetting(dppTriggermode, node, direction);
+
+  // register address-value settings
+  parseRegisters(node, registerValues, direction);
 
   CFG_LOG_DEBUG << "Done with processing register settings property tree";
 
