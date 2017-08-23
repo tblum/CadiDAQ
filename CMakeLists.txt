@@ -44,7 +44,8 @@ include_directories("${PROJECT_BINARY_DIR}")
 # find JADAQ
 Find_Package(Jadaq REQUIRED)
 include_directories(${JADAQ_INCLUDE_DIRS})
-
+set(JADAQLibraries ${JADAQ_LIBRARIES})
+  
 include_directories("${PROJECT_SOURCE_DIR}/include")
 # main executable
 ADD_EXECUTABLE( cadidaq
@@ -60,4 +61,4 @@ set_property(TARGET cadidaq PROPERTY CXX_STANDARD_REQUIRED)
 # set dynamic linking for Boost::log (would otherwise result in linking errors e.g. on OSX, AppleClang 7.0.2.7000181, Boost 1.63)
 set_target_properties(cadidaq PROPERTIES COMPILE_DEFINITIONS "BOOST_LOG_DYN_LINK")
 
-TARGET_LINK_LIBRARIES( cadidaq Boost::program_options Boost::log ${CAENLibraries})
+TARGET_LINK_LIBRARIES( cadidaq Boost::program_options Boost::log ${CAENLibraries} ${JADAQLibraries})
