@@ -20,6 +20,14 @@
 #define DG_LOG_ERROR BOOST_LOG_CHANNEL_SEV(lg, "dig", boost::log::trivial::error)
 #define DG_LOG_FATAL BOOST_LOG_CHANNEL_SEV(lg, "dig", boost::log::trivial::fatal)
 
+
+
+namespace std {
+    static inline ostream &operator<<(ostream &os, const caen::DPPAcquisitionMode &dam) {
+        os << '{' << dam.mode << ',' << dam.param << '}';
+        return os;
+    }
+}
 namespace cadidaq {
 
     class digitizer {
@@ -50,7 +58,7 @@ namespace cadidaq {
                 // TODO: more fine-grained error handling, more info on log
                 DG_LOG_ERROR << "Caught exception when communicating with digitizer " << dg->modelName() << ", serial " << dg->serialNumber() << ":";
                 if (direction == comDirection::WRITING)
-                    DG_LOG_ERROR << "\t Calling " << "e.where()" << " with argument '" << std::to_string(*value) << "' caused exception: " << e.what();
+                    DG_LOG_ERROR << "\t Calling " << "e.where()" << " with argument '" << *value << "' caused exception: " << e.what();
                 else
                     DG_LOG_ERROR << "\t Calling " << "e.where()" << " caused exception: " << e.what();
                 // setting assumed to be invalid regardless whether we read or write it:
@@ -81,35 +89,7 @@ namespace cadidaq {
                 value = boost::none;
             }
         }
-        
-        template <typename T1, typename T2>
-        void programWrapper(void (caen::Digitizer::*write)(T1, T2), void (caen::Digitizer::*read)(T1&, T2&), boost::optional<T1> &value1, boost::optional<T2> &value2, comDirection direction){
-            try{
-                if (direction == comDirection::WRITING){
-                    // WRITING
-                    if (value1 && value2)
-                        (dg->*write)(*value1, *value2);
-                } else {
-                    // READING
-                    T1 v1;
-                    T2 v2;
-                    (dg->*read)(v1, v2);
-                    value1 = v1;
-                    value2 = v2;
-                }
-            }
-            catch (caen::Error& e){
-                // TODO: more fine-grained error handling, more info on log
-                DG_LOG_ERROR << "Caught exception when communicating with digitizer " << dg->modelName() << ", serial " << dg->serialNumber() << ":";
-                if (direction == comDirection::WRITING)
-                    DG_LOG_ERROR << "\t Calling " << "e.where()" << " with arguments '" << std::to_string(*value1) << "', '" << std::to_string(*value2) << "' caused exception: " << e.what();
-                else
-                    DG_LOG_ERROR << "\t Calling " << "e.where()" << " caused exception: " << e.what();
-                // setting assumed to be invalid regardless whether we read or write it:
-                value1 = boost::none;
-                value2 = boost::none;
-            }
-        }
+
         void programMaskWrapper(void (caen::Digitizer::*write)(uint32_t), uint32_t (caen::Digitizer::*read)(), cadidaq::settingsBase::optionVector<bool> &vec, comDirection direction);
         
         template <typename T, typename C>

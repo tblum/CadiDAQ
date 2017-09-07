@@ -134,6 +134,7 @@ void cadidaq::digitizer::verifySettings(){
 /** Implements model/FW-specific settings verification and the calls mapping read/write methods from/to the digitizer and the corresponding the settings.
 
  */
+
 void cadidaq::digitizer::programSettings(comDirection direction){
 
   /* data readout */
@@ -196,6 +197,7 @@ void cadidaq::digitizer::programSettings(comDirection direction){
     programWrapper(&caen::Digitizer::setDESMode, &caen::Digitizer::getDESMode, reg->desMode.first, direction);
   }
 
+
   // DPP - FW
   CAEN_DGTZ_DPPFirmware_t fw = dg->getDPPFirmwareType();
   if (fw != CAEN_DGTZ_NotDPPFirmware){
@@ -212,7 +214,7 @@ void cadidaq::digitizer::programSettings(comDirection direction){
       programLoopWrapper(&caen::Digitizer::setDPPPreTriggerSize, &caen::Digitizer::getDPPPreTriggerSize, reg->dppPreTriggerSize, direction, true);
     }
     programLoopWrapper(&caen::Digitizer::setChannelPulsePolarity, &caen::Digitizer::getChannelPulsePolarity, reg->dppChPulsePolarity, direction, true);
-    programWrapper(&caen::Digitizer::setDPPAcquisitionMode, &caen::Digitizer::getDPPAcquisitionMode, reg->dppAcqMode.first, reg->dppAcqModeParam.first, direction);
+    programWrapper(&caen::Digitizer::setDPPAcquisitionMode, &caen::Digitizer::getDPPAcquisitionMode, reg->dppAcqMode.first, direction);
     programWrapper(&caen::Digitizer::setDPPTriggerMode, &caen::Digitizer::getDPPTriggerMode, reg->dppTriggermode.first, direction);
   }
 

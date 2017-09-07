@@ -354,8 +354,7 @@ cadidaq::registerSettings::registerSettings(std::string name, uint nchannels) : 
   // DPP-FW settings
   dppPreTriggerSize   = std::make_pair(Vec<uint32_t>(nchannels), "DPPPreTriggerSize");
   dppChPulsePolarity  = std::make_pair(Vec<CAEN_DGTZ_PulsePolarity_t>(nchannels), "DPPChannelPulsePolarity");
-  dppAcqMode          = std::make_pair(boost::none, "DPPAcquisitionMode");
-  dppAcqModeParam     = std::make_pair(boost::none, "DPPAcquisitionModeParameter");
+  dppAcqMode = std::make_pair(boost::none, "DPPAcquisitionMode");
   dppTriggermode      = std::make_pair(boost::none, "DPPTriggerMode");
 
 }
@@ -389,8 +388,7 @@ void cadidaq::registerSettings::processPTree(pt::iptree *node, parseDirection di
   // DPP-FW
   parseSetting(dppPreTriggerSize, node, direction);
   parseSetting(dppChPulsePolarity, node, direction);
-  parseSetting(dppAcqMode, node, direction);
-  parseSetting(dppAcqModeParam, node, direction);
+  //parseSetting(dppAcqMode, node, direction);
   parseSetting(dppTriggermode, node, direction);
 
   // register address-value settings
@@ -411,12 +409,12 @@ void cadidaq::registerSettings::verify(){
     CFG_LOG_DEBUG << "Setting '" << chEnable.second << "' enables " << countTrue(chEnable.first) << " channels.";
 
   // DPPAcquisitionMode requires two parameters to be set
-  if ((dppAcqMode.first && !dppAcqModeParam.first) || (!dppAcqMode.first && dppAcqModeParam.first)){
+/*  if ((dppAcqMode.first && !dppAcqModeParam.first) || (!dppAcqMode.first && dppAcqModeParam.first)){
     CFG_LOG_ERROR << "DPPAcquisitionMode requires two arguments and is missing either " << dppAcqMode.second << " or " << dppAcqModeParam.second << ". Cannot configure option!";
     // for consistency, set the option to be ignored later
     dppAcqMode.first = boost::none;
     dppAcqModeParam.first = boost::none;
-  }
+  }*/
 
   CFG_LOG_DEBUG << "Done with verifying register settings.";
 }
